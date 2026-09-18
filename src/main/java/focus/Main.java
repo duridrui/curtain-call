@@ -8,6 +8,9 @@ import javafx.stage.StageStyle;
 import javafx.scene.paint.Color;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import javafx.animation.Timeline;
+import javafx.animation.KeyFrame;
+import javafx.util.Duration;
 
 public class Main extends Application {
 
@@ -16,16 +19,39 @@ public class Main extends Application {
         stage.setAlwaysOnTop(true);     // 항상 위에오게
         stage.initStyle(StageStyle.TRANSPARENT);    // 배경 안 칠하게
 
-        // 검은색(불투명도 0.5) 창 만들기
+        DetectionState detectionState = new DetectionState();   // 감지 결과를 담을 객체생성
+        detectionState.setDistracting(true);
+        detectionState.setDistractionElapsedSeconds(0);
+        double opacity = Math.min(0.8, detectionState.getDistractionElapsedSeconds() * 0.08);   // 경과 시간을 opacity로 변환
+
+        // 검은색 불투명도 창 만들기
         StackPane root = new StackPane();
         Scene scene = new Scene(root, 400, 300);
-        scene.setFill(Color.rgb(0, 0, 0, 0.5));
+        scene.setFill(Color.rgb(0, 0, 0, opacity));
         stage.setScene(scene);
 
         root.setMouseTransparent(true); // 마우스 클릭 무시
 
         stage.show();   // 창 띄우기
 
+        Duration interval = Duration.seconds(1);    // 실행 간격 설정
+        KeyFrame keyFrame = new KeyFrame(interval, event -> {   // 1초 간격과 실행할 작업을 받는 KeyFrame 생성 시작
+            if (detectionState.isDistracting()) {
+                detectionState.setDistractionElapsedSeconds(detectionState.getDistractionElapsedSeconds() + 1);     // 경과 시간 증가
+                if (detectionState.getDistractionElapsedSeconds() >= 5) {
+                    detectionState.setDistracting(false);   // 경과 시간이 5초 이상일 때 false 전환
+                }
+            } else {
+                detectionState.setDistractionElapsedSeconds(Math.max(0, detectionState.getDistractionElapsedSeconds() - 1));    // 집중 상태일 때 경과 시간을 1씩 감소
+            }
+            double updatedOpacity = Math.min(0.8, detectionState.getDistractionElapsedSeconds() * 0.08);   // 경과 시간을 이용해 새로운 opacity 계산
+            scene.setFill(Color.rgb(0, 0, 0, updatedOpacity));   // 검은색 진함 설정
+            System.out.println(detectionState.getDistractionElapsedSeconds());     // 시간이 되면 터미널에 증가 여부 출력
+        });
+        Timeline timeline = new Timeline();     // 반복 실행의 일정표 객체생성
+        timeline.getKeyFrames().add(keyFrame);  // timeline안에 keyFrame 추가
+        timeline.setCycleCount(Timeline.INDEFINITE);    // Timeline 반복 횟수 설정
+        timeline.play();    // Timeline 실행 시작
         // 감지 스레드
         Thread watcher = new Thread(() -> {
             while (true) {  // 프로그램이 꺼질 때 까지 반복

@@ -48,12 +48,18 @@ public class Main extends Application {
             ProcessBuilder pb = new ProcessBuilder(
                 "osascript", "-e",
                 "tell application \"System Events\" to get name of first process whose frontmost is true"); // 터미널에 칠 명령어 (제일 앞에 있는 프로세스 이름이 뭔지)
+                pb.redirectErrorStream(true);   // 정상출력과 에러 출력을 합쳐 에러 상황 대비
                 Process p = pb.start(); // 명령어 실행
-                BufferedReader reader = new BufferedReader(new InputStreamReader (p.getInputStream())); // 실행결과를 읽을 수 있는 글자로 바꾸고 한 줄 씩 포장
-                String name = reader.readLine();    // 실행 결과에서 앱 이름 한 줄 읽어오기
+                try (BufferedReader r = new BufferedReader(new InputStreamReader (p.getInputStream()))) { // 실행결과를 읽을 수 있는 글자로 바꾸고 한 줄 씩 포장 + try 형태로 자동 닫힘
+                String name = r.readLine();    // 실행 결과에서 앱 이름 한 줄 읽어오기
                 p.waitFor();    // 명령어 실행이 끝날 때 까지 대기
                 return name;
-            } catch (Exception e) { // 문제 생기면 unknown으로 처리
+                }
+            } catch (InterruptedException e) {  // 인터럽트 상태 복원
+                Thread.currentThread().interrupt();
+                return "(unknown)";
+            } catch (Exception e) { // 에러 원인 콘솔에 출력
+                System.err.println("frontApp 실패 : " + e.getMessage());
                 return "(unknown)"; 
             }
         }

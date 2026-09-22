@@ -9,6 +9,8 @@ import javafx.scene.paint.Color;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import javafx.geometry.Rectangle2D;
+import javafx.stage.Screen;
 
 public class Main extends Application {
 
@@ -17,14 +19,19 @@ public class Main extends Application {
         stage.setAlwaysOnTop(true);
         stage.initStyle(StageStyle.TRANSPARENT);
 
+        Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();   // 화면 크기 정보를 screenBounds에 저장
+
         // 반투명 검은 오버레이 창 만들기
         StackPane root = new StackPane();
-        Scene scene = new Scene(root, 400, 300);
+        Scene scene = new Scene(root, screenBounds.getWidth(), screenBounds.getHeight());
         scene.setFill(Color.rgb(0, 0, 0, 0.5)); // 검은색, 불투명도 0.5
         stage.setScene(scene);
 
         root.setMouseTransparent(true); // 오버레이가 마우스 클릭을 가로채지 않게
+        // setMouseTransparent는 javaFx 화면 안에서만 통함 - macOs 레벨 클릭 통과는 별도 네이티브 연동 조사 필요
 
+        stage.setX(screenBounds.getMinX());
+        stage.setY(screenBounds.getMinY());
         stage.show();   // 창 띄우기
 
         ArrayList<String> allowedApps = new ArrayList<>();  // 허용 목록: 작업용으로 인정할 앱 이름

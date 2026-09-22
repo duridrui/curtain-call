@@ -31,12 +31,17 @@ public class Main extends Application {
         allowedApps.add("Code");
         allowedApps.add("Terminal");
 
+        DetectionState state = new DetectionState();
+
         // 감지 스레드: 1초마다 맨 앞 앱을 확인해 허용 목록과 비교
         Thread watcher = new Thread(() -> {
             while (true) {  // 프로그램이 꺼질 때 까지 반복
                 String app = frontApp(); // 앱 이름을 한 번만 구해서 재사용 (osascript 두 번 실행 방지)
                 boolean allowed = allowedApps.contains(app); // 허용 목록에 있는지 판정
                 System.out.println("front: " + app + " / 허용 : " + allowed); // 앱 이름과 허용 여부 출력
+                state.setCurrentAppName(app);
+                state.setDistracting(!allowed);
+                // 오버레이가 이 state를 읽어갈 자리 (검토 2차 때 연결)
                 try {
                     Thread.sleep(1000); // 1초 대기
                 } catch (InterruptedException e) {  // 스레드 종료 신호를 받으면 루프 탈출

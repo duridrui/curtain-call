@@ -11,6 +11,11 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import javafx.geometry.Rectangle2D;
 import javafx.stage.Screen;
+import com.sun.jna.NativeLibrary;
+import com.sun.jna.Function;
+import com.sun.jna.Pointer;
+import com.sun.jna.NativeLong;
+
 
 public class Main extends Application {
 
@@ -28,11 +33,12 @@ public class Main extends Application {
         stage.setScene(scene);
 
         root.setMouseTransparent(true); // 오버레이가 마우스 클릭을 가로채지 않게
-        // setMouseTransparent는 javaFx 화면 안에서만 통함 - macOs 레벨 클릭 통과는 별도 네이티브 연동 조사 필요
+        // setMouseTransparent는 javaFx 화면 안에서만 통함 - macOS 레벨 클릭 통과는 아래 enableMacClickThrough()에서 해결함
 
         stage.setX(screenBounds.getMinX());
         stage.setY(screenBounds.getMinY());
         stage.show();   // 창 띄우기
+        enableMacClickThrough();
 
         ArrayList<String> allowedApps = new ArrayList<>();  // 허용 목록: 작업용으로 인정할 앱 이름
         allowedApps.add("Code");
@@ -59,6 +65,37 @@ public class Main extends Application {
         watcher.setDaemon(true);    // 창 닫으면 이 스레드도 같이 종료되게
         watcher.start();    // 스레드 시작
     }   
+
+    /*
+    클릭이 오버레이를 그냥 통과해서 뒤에 있는 다른 앱을 누를 수 있게 하는 코드
+    setMouseTransparent(위에 있는 줄)는 JavaFx 창 안에서만 통하고 진짜로 macOS한테
+    "이 창은 클릭 무시해도 돼"라고 알려주려면 이 메서드가 필요해서 넣음
+    JNA라는 도구로 macOS 쪽 코드에 직접 말을 걸어서 처리함
+    */
+    private void enableMacClickThrough() {
+        if (!System.getProperty("os.name", "").toLowerCase().contains("mac")) return;
+        try {
+            NativeLibrary objc = NativeLibrary.getInstance("objc");
+            Function getClass = objc.getFunction("objc_getClass");
+            Function sel = objc.getFunction("sel_registerName");
+            Function msg = objc.getFunction("objc_msgSend");
+
+            Pointer nsAppCls = getClass.invokePointer(new Object[]{"NSApplication"});
+            Pointer nsApp = msg.invokePointer(new Object[]{nsAppCls, sel.invokePointer(new Object[]{"sharedApplication"})});
+            Pointer windows = msg.invokePointer(new Object[]{nsApp, sel.invokePointer(new Object[]{"windows"})});
+            long count = msg.invokeLong(new Object[]{windows, sel.invokePointer(new Object[]{"count"})});
+
+            Pointer setSel = sel.invokePointer(new Object[]{"setIgnoresMouseEvents:"});
+            for (long i = 0; i < count; i++) {
+                Pointer w = msg.invokePointer(new Object[]{
+                    windows, sel.invokePointer(new Object[]{"objectAtIndex:"}), new NativeLong(i)});
+                msg.invokeVoid(new Object[]{w, setSel, (byte) 1});  // YES
+            }
+        } catch (Throwable t) {
+            // 클릭 통과 실패해도 앱은 계속 뜨게
+            System.err.println("클릭 통과 설정 실패(무시하고 계속): " + t.getMessage());
+        }
+    }
 
     // 제일 앞에 떠 있는 앱 이름을 알아내는 메서드 / 실패하면 (unknown)을 돌려줌
     private String frontApp() {

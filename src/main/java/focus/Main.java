@@ -42,7 +42,7 @@ public class Main extends Application {
             if (detectionState.isDistracting()) {
                 detectionState.setDistractionElapsedSeconds(detectionState.getDistractionElapsedSeconds() + 1);    // 경과 시간 증가
             } else {
-                detectionState.setDistractionElapsedSeconds(Math.max(0, detectionState.getDistractionElapsedSeconds() - 1));    // 집중 상태일 때 경과 시간을 1씩 감소
+                detectionState.setDistractionElapsedSeconds(0);    // 집중 상태일 때 경과 시간 초기화
             }
             curtainOverlay.updateCurtain(detectionState.getDistractionElapsedSeconds(), detectionState.isDistracting());
             System.out.println(detectionState.getDistractionElapsedSeconds());    // 시간이 되면 터미널에 증가 여부 출력

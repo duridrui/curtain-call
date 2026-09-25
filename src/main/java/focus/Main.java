@@ -8,30 +8,49 @@ import javafx.stage.StageStyle;
 import javafx.scene.paint.Color;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
+import javafx.animation.Timeline;
+import javafx.animation.KeyFrame;
+import javafx.util.Duration;
 import javafx.geometry.Rectangle2D;
 import javafx.stage.Screen;
+import java.util.ArrayList;
 import com.sun.jna.NativeLibrary;
 import com.sun.jna.Function;
 import com.sun.jna.Pointer;
 import com.sun.jna.NativeLong;
 
-
 public class Main extends Application {
 
     @Override
     public void start(Stage stage) {
-        stage.setAlwaysOnTop(true);
-        stage.initStyle(StageStyle.TRANSPARENT);
+        stage.setAlwaysOnTop(true);    // 항상 위에오게
+        stage.initStyle(StageStyle.TRANSPARENT);    // 배경 안 칠하게
+        Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();    // 주 모니터의 사용 가능한 화면 크기 저장
 
-        Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();   // 화면 크기 정보를 screenBounds에 저장
+        DetectionState detectionState = new DetectionState();    // 감지 결과를 담을 객체생성
 
-        // 반투명 검은 오버레이 창 만들기
+        // 커튼을 담을 화면 판과 투명한 Scene을 준비
         StackPane root = new StackPane();
-        Scene scene = new Scene(root, screenBounds.getWidth(), screenBounds.getHeight());
-        scene.setFill(Color.rgb(0, 0, 0, 0.5)); // 검은색, 불투명도 0.5
+        Scene scene = new Scene(root, screenBounds.getWidth(), screenBounds.getHeight());    // 실제 화면 크기로 Scene 생성
+        scene.setFill(Color.TRANSPARENT);    // Scene 배경을 투명하게 설정
         stage.setScene(scene);
+        CurtainOverlay curtainOverlay = new CurtainOverlay(scene.getWidth(), scene.getHeight());    // 현재 화면 크기로 커튼 객체 생성
+        root.getChildren().add(curtainOverlay.getView());    // 커튼 판을 root 화면에 추가
 
+        Duration interval = Duration.seconds(1);    // 실행 간격 설정
+        KeyFrame keyFrame = new KeyFrame(interval, event -> {    // 1초 간격과 실행할 작업을 받는 KeyFrame 생성 시작
+            if (detectionState.isDistracting()) {
+                detectionState.setDistractionElapsedSeconds(detectionState.getDistractionElapsedSeconds() + 1);    // 경과 시간 증가
+            } else {
+                detectionState.setDistractionElapsedSeconds(Math.max(0, detectionState.getDistractionElapsedSeconds() - 1));    // 집중 상태일 때 경과 시간을 1씩 감소
+            }
+            curtainOverlay.updateCurtain(detectionState.getDistractionElapsedSeconds(), detectionState.isDistracting());
+            System.out.println(detectionState.getDistractionElapsedSeconds());    // 시간이 되면 터미널에 증가 여부 출력
+        });
+        Timeline timeline = new Timeline();    // 반복 실행의 일정표 객체생성
+        timeline.getKeyFrames().add(keyFrame);    // timeline안에 keyFrame 추가
+        timeline.setCycleCount(Timeline.INDEFINITE);    // Timeline 반복 횟수 설정
+        timeline.play();    // Timeline 실행 시작
         root.setMouseTransparent(true); // 오버레이가 마우스 클릭을 가로채지 않게
         // setMouseTransparent는 javaFx 화면 안에서만 통함 - macOS 레벨 클릭 통과는 아래 enableMacClickThrough()에서 해결함
 
@@ -44,17 +63,14 @@ public class Main extends Application {
         allowedApps.add("Code");
         allowedApps.add("Terminal");
 
-        DetectionState state = new DetectionState();
-
         // 감지 스레드: 1초마다 맨 앞 앱을 확인해 허용 목록과 비교
         Thread watcher = new Thread(() -> {
             while (true) {  // 프로그램이 꺼질 때 까지 반복
                 String app = frontApp(); // 앱 이름을 한 번만 구해서 재사용 (osascript 두 번 실행 방지)
                 boolean allowed = allowedApps.contains(app); // 허용 목록에 있는지 판정
                 System.out.println("front: " + app + " / 허용 : " + allowed); // 앱 이름과 허용 여부 출력
-                state.setCurrentAppName(app);
-                state.setDistracting(!allowed);
-                // 오버레이가 이 state를 읽어갈 자리 (검토 2차 때 연결)
+                detectionState.setCurrentAppName(app);
+                detectionState.setDistracting(!allowed);
                 try {
                     Thread.sleep(1000); // 1초 대기
                 } catch (InterruptedException e) {  // 스레드 종료 신호를 받으면 루프 탈출

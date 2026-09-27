@@ -14,6 +14,7 @@ import javafx.util.Duration;
 import javafx.geometry.Rectangle2D;
 import javafx.stage.Screen;
 import java.util.ArrayList;
+import java.util.List;
 import com.sun.jna.NativeLibrary;
 import com.sun.jna.Function;
 import com.sun.jna.Pointer;
@@ -67,10 +68,10 @@ public class Main extends Application {
         Thread watcher = new Thread(() -> {
             while (true) {  // 프로그램이 꺼질 때 까지 반복
                 String app = frontApp(); // 앱 이름을 한 번만 구해서 재사용 (osascript 두 번 실행 방지)
-                boolean allowed = allowedApps.contains(app); // 허용 목록에 있는지 판정
-                System.out.println("front: " + app + " / 허용 : " + allowed); // 앱 이름과 허용 여부 출력
+                boolean distracting = isDistracting(app, allowedApps); // 딴짓인지 판정
+                System.out.println("front: " + app + " / 딴짓 : " + distracting); // 딴짓 여부
                 detectionState.setCurrentAppName(app);
-                detectionState.setDistracting(!allowed);
+                detectionState.setDistracting(distracting);
                 try {
                     Thread.sleep(1000); // 1초 대기
                 } catch (InterruptedException e) {  // 스레드 종료 신호를 받으면 루프 탈출
@@ -113,17 +114,25 @@ public class Main extends Application {
         }
     }
 
+    // 딴짓 판정 / 모르면 딴짓 아님(커튼에 갇히지 않게)
+    static boolean isDistracting(String app, List<String> allowed) {
+        if (app == null || app.equals("(unknown)")) return false;   // 모름 -> 딴짓 아님
+        if (app.equals("java")) return false;                       // 자기 자신 -> 딴짓 아님
+        return !allowed.contains(app);                              // 목록에 없으면 딴짓
+    }
+
     // 제일 앞에 떠 있는 앱 이름을 알아내는 메서드 / 실패하면 (unknown)을 돌려줌
     private String frontApp() {
         try {
             ProcessBuilder pb = new ProcessBuilder(
                 "osascript", "-e",
                 "tell application \"System Events\" to get name of first process whose frontmost is true");
-                pb.redirectErrorStream(true);   // 정상 출력과 에러 출력을 합쳐서 에러도 놓치지 않게
+                pb.redirectError(ProcessBuilder.Redirect.DISCARD);   // 에러 출력은 버려서 오류 문장이 앱 이름으로 섞이지 않게
                 Process p = pb.start(); // osascript 실행
                 try (BufferedReader r = new BufferedReader(new InputStreamReader (p.getInputStream()))) { // 블록이 끝나면 자동으로 스트림 닫힘
                 String name = r.readLine();    // 실행 결과에서 앱 이름 한 줄 읽어오기
-                p.waitFor();    // 명령어 실행이 끝날 때 까지 대기
+                int code = p.waitFor(); // 실행이 끝날 때까지 기다리고 종료코드(0=성공)를 받아둠
+                if (code != 0 || name == null) return "(unknown)";
                 return name;
                 }
             } catch (InterruptedException e) {  // 인터럽트 상태 복원

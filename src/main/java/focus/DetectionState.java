@@ -1,8 +1,8 @@
 package focus;
 // 감지 결과(앱 이름·딴짓 여부·경과 시간)를 담는 곳
 public class DetectionState {
-    private String currentAppName;
-    private boolean isDistracting;
+    private volatile String currentAppName;
+    private volatile boolean isDistracting;
     private long distractionElapsedSeconds;
 
     public String getCurrentAppName() {

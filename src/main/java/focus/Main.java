@@ -15,6 +15,7 @@ import javafx.geometry.Rectangle2D;
 import javafx.stage.Screen;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import com.sun.jna.NativeLibrary;
 import com.sun.jna.Function;
 import com.sun.jna.Pointer;
@@ -125,24 +126,31 @@ public class Main extends Application {
     private String frontApp() {
         try {
             ProcessBuilder pb = new ProcessBuilder(
-                "osascript", "-e",
-                "tell application \"System Events\" to get name of first process whose frontmost is true");
-                pb.redirectError(ProcessBuilder.Redirect.DISCARD);   // 에러 출력은 버려서 오류 문장이 앱 이름으로 섞이지 않게
-                Process p = pb.start(); // osascript 실행
-                try (BufferedReader r = new BufferedReader(new InputStreamReader (p.getInputStream()))) { // 블록이 끝나면 자동으로 스트림 닫힘
-                String name = r.readLine();    // 실행 결과에서 앱 이름 한 줄 읽어오기
-                int code = p.waitFor(); // 실행이 끝날 때까지 기다리고 종료코드(0=성공)를 받아둠
-                if (code != 0 || name == null) return "(unknown)";
-                return name;
+                    "osascript", "-e",
+                    "tell application \"System Events\" to get name of first process whose frontmost is true");
+            pb.redirectError(ProcessBuilder.Redirect.DISCARD); // 에러 출력은 버려서 오류 문장이 앱 이름으로 섞이지 않게
+            Process p = pb.start(); // osascript 실행
+            boolean finished = p.waitFor(2, TimeUnit.SECONDS); // 최대 2초만 기다리고 넘으면 멈춘 osascript를 끝냄
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) { // 블록이 끝나면 자동으로 스트림 닫힘
+                if (!finished) {
+                    p.destroyForcibly(); // 2초 넘게 멈춘 osascript를 강제로 끝냄
+                    return "(unknown)";
                 }
-            } catch (InterruptedException e) {  // 인터럽트 상태 복원
-                Thread.currentThread().interrupt();
-                return "(unknown)";
-            } catch (Exception e) { // 에러 원인 콘솔에 출력
-                System.err.println("frontApp 실패 : " + e.getMessage());
-                return "(unknown)"; 
+                String name = r.readLine(); // 실행 결과에서 앱 이름 한 줄 읽어오기
+                int code = p.exitValue(); // 끝난 명령의 종료코드(0=성공)를 꺼냄
+                if (code != 0 || name == null)
+                    return "(unknown)";
+                return name;
             }
+        } catch (InterruptedException e) { // 인터럽트 상태 복원
+            Thread.currentThread().interrupt();
+            return "(unknown)";
+        } catch (Exception e) { // 에러 원인 콘솔에 출력
+            System.err.println("frontApp 실패 : " + e.getMessage());
+            return "(unknown)";
         }
+    }
+
     public static void main(String[] args) {
         launch(args);
     }

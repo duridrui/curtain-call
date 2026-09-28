@@ -28,4 +28,10 @@ class MainTest {
     void 자기자신은_딴짓아님() {
         assertFalse(Main.isDistracting("java", allowed));
     }
+
+    @Test
+    void 빈이름은_딴짓아님() {
+        assertFalse(Main.isDistracting("", allowed));
+        assertFalse(Main.isDistracting(" ", allowed));
+    }
 }

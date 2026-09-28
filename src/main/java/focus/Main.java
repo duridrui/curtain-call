@@ -116,7 +116,7 @@ public class Main extends Application {
 
     // 딴짓 판정 / 모르면 딴짓 아님(커튼에 갇히지 않게)
     static boolean isDistracting(String app, List<String> allowed) {
-        if (app == null || app.equals("(unknown)")) return false;   // 모름 -> 딴짓 아님
+        if (app == null || app.equals("(unknown)") || app.isBlank()) return false;   // 모르거나 비었을 때 -> 딴짓 아님
         if (app.equals("java")) return false;                       // 자기 자신 -> 딴짓 아님
         return !allowed.contains(app);                              // 목록에 없으면 딴짓
     }

@@ -1,6 +1,7 @@
 package focus;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
@@ -59,6 +60,7 @@ public class Main extends Application {
         stage.setY(screenBounds.getMinY());
         stage.show();   // 창 띄우기
         enableMacClickThrough();
+        installQuitMenu();
 
         ArrayList<String> allowedApps = new ArrayList<>();  // 허용 목록: 작업용으로 인정할 앱 이름
         allowedApps.add("Code");
@@ -111,6 +113,31 @@ public class Main extends Application {
         } catch (Throwable t) {
             // 클릭 통과 실패해도 앱은 계속 뜨게
             System.err.println("클릭 통과 설정 실패(무시하고 계속): " + t.getMessage());
+        }
+    }
+
+    // 메뉴바에 아이콘 추가 (커튼에 갇혔을 때 비상구)
+    private void installQuitMenu() {
+        try {
+            // 메뉴판과 "종료"
+            java.awt.PopupMenu trayMenu = new java.awt.PopupMenu();
+            java.awt.MenuItem quitItem = new java.awt.MenuItem("종료");
+            trayMenu.add(quitItem); // 태혁아 여기에 허용 목록 설정 항목 추가해라
+
+            // "종료"를 누르면 할 일
+            quitItem.addActionListener(e -> {
+                Platform.exit();
+                System.exit(0);
+            });
+
+            // 메뉴바 아이콘에 올리기
+            java.awt.Image img = java.awt.Toolkit.getDefaultToolkit()
+                    .getImage(getClass().getResource("/images/tray.png"));
+            java.awt.TrayIcon trayIcon = new java.awt.TrayIcon(img, "Curtain Call", trayMenu);
+            trayIcon.setImageAutoSize(true);
+            java.awt.SystemTray.getSystemTray().add(trayIcon);
+        } catch (Exception e) {
+            System.err.println("종료 메뉴 설치 실패(무시하고 계속): " + e.getMessage());
         }
     }
 

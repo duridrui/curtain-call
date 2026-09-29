@@ -7,10 +7,12 @@ import javafx.scene.paint.ImagePattern;
 import javafx.scene.layout.StackPane;
 import javafx.geometry.Pos;
 import javafx.animation.TranslateTransition;
+import javafx.animation.Interpolator;
 import javafx.util.Duration;
 import javafx.application.Platform;
 
 public class CurtainOverlay {
+    private static final double CLOSE_DURATION_SECONDS = 30.0;      // 커튼 닫히는 시간 30초 설정
     private Rectangle leftCurtain = new Rectangle();    // 왼쪽 커튼 객체를 저장
     private Rectangle rightCurtain = new Rectangle();    // 오른쪽 커튼 객체를 저장
     private StackPane view = new StackPane();    // 커튼 두 장을 담을 화면 판을 저장
@@ -24,6 +26,8 @@ public class CurtainOverlay {
         leftCurtain.setHeight(screenHeight);    // 왼쪽 커튼 세로 길이 설정
         rightCurtain.setWidth(screenWidth / 2);    // 오른쪽 커튼 가로 길이 설정
         rightCurtain.setHeight(screenHeight);    // 오른쪽 커튼 세로 길이 설정
+        leftTransition.setInterpolator(Interpolator.LINEAR);
+        rightTransition.setInterpolator(Interpolator.LINEAR);       // 양쪽 커튼 일정한 속도로 설정
 
         java.net.URL imageUrl = CurtainOverlay.class.getResource("/images/curtain.jpg");    // 커튼 이미지 주소 찾기
         Color curtainColor = Color.rgb(0, 0, 0, 0.8);    // 커튼 이미지 로딩 실패 시 검은색 커튼 불투명도 80%
@@ -53,7 +57,7 @@ public class CurtainOverlay {
         double closeProgress;    // 닫힌 정도를 소수로 저장
 
         if (isDistracting) {    // 딴짓 중인지 확인
-            closeProgress = Math.min(1.0, elapsedSeconds / 10.0);    // 결과가 1.0이 넘지 않도록 제한
+            closeProgress = Math.min(1.0, elapsedSeconds / CLOSE_DURATION_SECONDS);    // 경과 시간을 닫힘 시간으로 나눠 비율 계산 최대값 1.0
         } else {
             closeProgress = 0.0;
         }

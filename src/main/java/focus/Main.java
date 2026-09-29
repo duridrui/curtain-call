@@ -14,13 +14,13 @@ import javafx.animation.KeyFrame;
 import javafx.util.Duration;
 import javafx.geometry.Rectangle2D;
 import javafx.stage.Screen;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import com.sun.jna.NativeLibrary;
 import com.sun.jna.Function;
 import com.sun.jna.Pointer;
 import com.sun.jna.NativeLong;
+import java.nio.file.Path;
 
 public class Main extends Application {
 
@@ -63,15 +63,15 @@ public class Main extends Application {
         enableMacClickThrough();
         installQuitMenu();
 
-        ArrayList<String> allowedApps = new ArrayList<>();  // 허용 목록: 작업용으로 인정할 앱 이름
-        allowedApps.add("Code");
-        allowedApps.add("Terminal");
+        // 허용 목록: ~/.curtain-call/allowed-apps.txt에서 읽음(없으면 기본 목록)
+        AllowList allowList = new AllowList(
+            Path.of(System.getProperty("user.home"), ".curtain-call", "allowed-apps.txt"));
 
         // 감지 스레드: 1초마다 맨 앞 앱을 확인해 허용 목록과 비교
         Thread watcher = new Thread(() -> {
             while (true) {  // 프로그램이 꺼질 때 까지 반복
                 String app = frontApp(); // 앱 이름을 한 번만 구해서 재사용 (osascript 두 번 실행 방지)
-                boolean distracting = isDistracting(app, allowedApps); // 딴짓인지 판정
+                boolean distracting = isDistracting(app, allowList.get()); // 딴짓인지 판정
                 System.out.println("front: " + app + " / 딴짓 : " + distracting); // 딴짓 여부
                 detectionState.setCurrentAppName(app);
                 detectionState.setDistracting(distracting);

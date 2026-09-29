@@ -2,6 +2,8 @@ package focus;
 
 import javafx.scene.shape.Rectangle;
 import javafx.scene.paint.Color;
+import javafx.scene.image.Image;
+import javafx.scene.paint.ImagePattern;
 import javafx.scene.layout.StackPane;
 import javafx.geometry.Pos;
 import javafx.animation.TranslateTransition;
@@ -23,9 +25,17 @@ public class CurtainOverlay {
         rightCurtain.setWidth(screenWidth / 2);    // 오른쪽 커튼 가로 길이 설정
         rightCurtain.setHeight(screenHeight);    // 오른쪽 커튼 세로 길이 설정
 
-        Color curtainColor = Color.rgb(0, 0, 0, 0.8);    // 검은색 커튼 불투명도 80%
+        java.net.URL imageUrl = CurtainOverlay.class.getResource("/images/curtain.jpg");    // 커튼 이미지 주소 찾기
+        Color curtainColor = Color.rgb(0, 0, 0, 0.8);    // 커튼 이미지 로딩 실패 시 검은색 커튼 불투명도 80%
         leftCurtain.setFill(curtainColor);
-        rightCurtain.setFill(curtainColor);
+        rightCurtain.setFill(curtainColor);     // 양쪽 커튼에 기본 검은색을 먼저 적용
+        if (imageUrl != null) {
+            Image curtainImage = new Image(imageUrl.toExternalForm());      // 이미지 주소를 실제 사진 객체로 읽음
+            if (!curtainImage.isError()) {
+                leftCurtain.setFill(new ImagePattern(curtainImage, 0, 0, 2, 1, true));
+                rightCurtain.setFill(new ImagePattern(curtainImage, -1, 0, 2, 1, true));    // 사진 한 장을 절반으로 나눠 적용
+            }
+        }
 
         StackPane.setAlignment(leftCurtain, Pos.CENTER_LEFT);    // 커튼을 각 화면 끝에 정렬
         StackPane.setAlignment(rightCurtain, Pos.CENTER_RIGHT);

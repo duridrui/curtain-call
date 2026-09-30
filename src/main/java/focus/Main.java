@@ -34,6 +34,7 @@ public class Main extends Application {
 
         // 커튼을 담을 화면 판과 투명한 Scene을 준비
         StackPane root = new StackPane();
+        root.setStyle("-fx-background-color: transparent;");     // 커튼 배경을 투명하게
         Scene scene = new Scene(root, screenBounds.getWidth(), screenBounds.getHeight());    // 실제 화면 크기로 Scene 생성
         scene.setFill(Color.TRANSPARENT);    // Scene 배경을 투명하게 설정
         stage.setScene(scene);

@@ -31,6 +31,7 @@ public class Main extends Application {
         Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();    // 주 모니터의 사용 가능한 화면 크기 저장
 
         DetectionState detectionState = new DetectionState();    // 감지 결과를 담을 객체생성
+        DistractionStats stats = new DistractionStats();    // 딴짓 통계(횟수,시간)를 모을 객체 생성
 
         // 커튼을 담을 화면 판과 투명한 Scene을 준비
         StackPane root = new StackPane();
@@ -75,6 +76,7 @@ public class Main extends Application {
                 System.out.println("front: " + app + " / 딴짓 : " + distracting); // 딴짓 여부
                 detectionState.setCurrentAppName(app);
                 detectionState.setDistracting(distracting);
+                stats.update(app, distracting, System.currentTimeMillis()); // 통계에 지금 앱,판정,시각 전달
                 try {
                     Thread.sleep(1000); // 1초 대기
                 } catch (InterruptedException e) {  // 스레드 종료 신호를 받으면 루프 탈출

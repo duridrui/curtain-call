@@ -14,8 +14,8 @@ public class DistractionStats {
 
     private final Map<String, Integer> appCounts = new HashMap<>();      // 이름별 횟수
     private final Map<String, Long> appMillis = new HashMap<>();         // 이름별 시간
-    private volatile Map<String, Integer> appCountsView = Map.of();      // 횟수 복사본
-    private volatile Map<String, Long> appMillisView = Map.of();         // 시간 복사본
+    private volatile Map<String, Integer> appCountsView = Map.of();      // appCounts를 수정 불가 Map으로 복사한 것
+    private volatile Map<String, Long> appMillisView = Map.of();         // appMillis를 수정 불가 Map으로 복사한 것
     private volatile String mostVisitedApp;                              // 가장 자주 간 곳, 아직 없으면 null
 
     // 감지 스레드가 1초마다 부름 : 지금 앱 이름, 지금 판정, 지금 시각
@@ -29,7 +29,7 @@ public class DistractionStats {
 
             totalDistractionMillis += spent;                            // 전체 누적에 더하기
             appMillis.merge(currentApp, spent, Long::sum);              // 그 곳 시간 칸에 더하기
-            appMillisView = Map.copyOf(appMillis);                      // 시간 복사본 갱신
+            appMillisView = Map.copyOf(appMillis);                      // appMillis를 다시 복사해 appMillisView 교체
         }
         if (next != null) {                                             // 지금 딴짓 중이면 -> 새 딴짓 시작
             if (currentApp == null)                                     // 집중에서 넘어왔을 때만
@@ -37,7 +37,7 @@ public class DistractionStats {
             distractionStartMillis = nowMillis;                         // 시작 시각 기록
 
             appCounts.merge(next, 1, Integer::sum);                     // 그 곳 횟수 +1
-            appCountsView = Map.copyOf(appCounts);                      // 횟수 복사본 갱신
+            appCountsView = Map.copyOf(appCounts);                      // appCounts를 다시 복사해 appCountsView 교체
 
             int count = appCounts.get(next);                            // 이 곳의 지금 횟수
             int leaderCount = mostVisitedApp == null ? 0 : appCounts.get(mostVisitedApp);               // 지금 1등의 횟수, 없으면 0

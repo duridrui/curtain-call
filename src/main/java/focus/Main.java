@@ -23,10 +23,12 @@ import com.sun.jna.NativeLong;
 import java.nio.file.Path;
 
 public class Main extends Application {
+    private static final String OVERLAY_TITLE = "Curtain Call Overlay";
 
     @Override
     public void start(Stage stage) {
         stage.setAlwaysOnTop(true);    // 항상 위에오게
+        stage.setTitle(OVERLAY_TITLE);
         stage.initStyle(StageStyle.TRANSPARENT);    // 배경 안 칠하게
         Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();    // 주 모니터의 사용 가능한 화면 크기 저장
 
@@ -44,12 +46,13 @@ public class Main extends Application {
 
         Duration interval = Duration.seconds(1);    // 실행 간격 설정
         KeyFrame keyFrame = new KeyFrame(interval, event -> {    // 1초 간격과 실행할 작업을 받는 KeyFrame 생성 시작
-            if (detectionState.isDistracting()) {
+            boolean distracting = detectionState.isDistracting();
+            if (distracting) {
                 detectionState.setDistractionElapsedSeconds(detectionState.getDistractionElapsedSeconds() + 1);    // 경과 시간 증가
             } else {
                 detectionState.setDistractionElapsedSeconds(0);    // 집중 상태일 때 경과 시간 초기화
             }
-            curtainOverlay.updateCurtain(detectionState.getDistractionElapsedSeconds(), detectionState.isDistracting());
+            curtainOverlay.updateCurtain(detectionState.getDistractionElapsedSeconds(), distracting);
             System.out.println(detectionState.getDistractionElapsedSeconds());    // 시간이 되면 터미널에 증가 여부 출력
         });
         Timeline timeline = new Timeline();    // 반복 실행의 일정표 객체생성
@@ -63,11 +66,12 @@ public class Main extends Application {
         stage.setY(screenBounds.getMinY());
         stage.show();   // 창 띄우기
         enableMacClickThrough();
-        installQuitMenu();
 
         // 허용 목록: ~/.curtain-call/allowed-apps.txt에서 읽음(없으면 기본 목록)
         AllowList allowList = new AllowList(
             Path.of(System.getProperty("user.home"), ".curtain-call", "allowed-apps.txt"));
+
+        installQuitMenu(allowList);
 
         // 감지 스레드: 1초마다 맨 앞 앱을 확인해 허용 목록과 비교
         Thread watcher = new Thread(() -> {
@@ -108,11 +112,18 @@ public class Main extends Application {
             Pointer windows = msg.invokePointer(new Object[]{nsApp, sel.invokePointer(new Object[]{"windows"})});
             long count = msg.invokeLong(new Object[]{windows, sel.invokePointer(new Object[]{"count"})});
 
-            Pointer setSel = sel.invokePointer(new Object[]{"setIgnoresMouseEvents:"});
+            Pointer setSel = sel.invokePointer(new Object[]{"setIgnoresMouseEvents:"});     // 클릭 무시 설정과 창 제목 확인에 사용할 메서드 준비
+            Pointer titleSel = sel.invokePointer(new Object[]{"title"});
+            Pointer utf8Sel = sel.invokePointer(new Object[]{"UTF8String"});
             for (long i = 0; i < count; i++) {
                 Pointer w = msg.invokePointer(new Object[]{
                     windows, sel.invokePointer(new Object[]{"objectAtIndex:"}), new NativeLong(i)});
-                msg.invokeVoid(new Object[]{w, setSel, (byte) 1});  // YES
+                Pointer nsTitle = msg.invokePointer(new Object[]{w, titleSel});     // 현재 창의 제목을 읽어 Java 문자열로 변환
+                if (nsTitle == null) continue;
+                Pointer cTitle = msg.invokePointer(new Object[]{nsTitle, utf8Sel});
+                String title = (cTitle == null) ? null : cTitle.getString(0);
+                if (!OVERLAY_TITLE.equals(title)) continue;     // 커튼 창이 아니면 건너뜀
+                msg.invokeVoid(new Object[]{w, setSel, (byte) 1});  // 커튼 창의 클릭을 뒤 화면으로 통과
             }
         } catch (Throwable t) {
             // 클릭 통과 실패해도 앱은 계속 뜨게
@@ -121,13 +132,16 @@ public class Main extends Application {
     }
 
     // 메뉴바에 아이콘 추가 (커튼에 갇혔을 때 비상구)
-    private void installQuitMenu() {
+    private void installQuitMenu(AllowList allowList) {
         try {
-            // 메뉴판과 "종료"
+            // 설정 메뉴와 종료 메뉴 준비
             java.awt.PopupMenu trayMenu = new java.awt.PopupMenu();
             java.awt.MenuItem quitItem = new java.awt.MenuItem("종료");
-            trayMenu.add(quitItem); // 태혁아 여기에 허용 목록 설정 항목 추가해라
-
+            java.awt.MenuItem settingsItem = new java.awt.MenuItem("허용 목록 설정…");
+            AllowListWindow settingsWindow = new AllowListWindow(allowList);
+            trayMenu.add(settingsItem);
+            trayMenu.add(quitItem);
+            settingsItem.addActionListener(e -> Platform.runLater(() -> settingsWindow.show()));    // 메뉴 클릭을 화면 작업으로 넘김
             // "종료"를 누르면 할 일
             quitItem.addActionListener(e -> {
                 Platform.exit();

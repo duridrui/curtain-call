@@ -50,7 +50,7 @@ public class AllowListWindow {
                     items.setAll(allowList.get());
                     statusLabel.setText(usingDefault ? "기본 목록으로 저장했습니다." : "저장했습니다.");
                 } catch (IOException exception) {
-                    statusLabel.setText("저장에 실패했습니다");
+                    statusLabel.setText("저장에 실패했습니다.");
                 }
             });
             HBox inputRow = new HBox(8, inputField, addButton);     // 입력칸과 추가 버튼을 가로 배치

@@ -23,6 +23,8 @@ import com.sun.jna.NativeLong;
 import java.nio.file.Path;
 
 public class Main extends Application {
+    // 탭 주소로 사이트 판정을 하는 브라우저, 이 밖의 브라우저는 앱 이름으로만 판정
+    static final List<String> BROWSERS = List.of("Google Chrome", "Safari");
 
     @Override
     public void start(Stage stage) {
@@ -68,15 +70,35 @@ public class Main extends Application {
         AllowList allowList = new AllowList(
             Path.of(System.getProperty("user.home"), ".curtain-call", "allowed-apps.txt"));
 
+        // 허용 사이트 목록
+        SiteAllowList siteAllowList = new SiteAllowList(
+            Path.of(System.getProperty("user.home"), ".curtain-call", "allowed-sites.txt"));
+
         // 감지 스레드: 1초마다 맨 앞 앱을 확인해 허용 목록과 비교
         Thread watcher = new Thread(() -> {
             while (true) {  // 프로그램이 꺼질 때 까지 반복
                 String app = frontApp(); // 앱 이름을 한 번만 구해서 재사용 (osascript 두 번 실행 방지)
-                boolean distracting = isDistracting(app, allowList.get()); // 딴짓인지 판정
-                System.out.println("front: " + app + " / 딴짓 : " + distracting); // 딴짓 여부
+
+                // 딴짓인지 판정 결과
+                boolean distracting;
+                String statsName = app;                             // 통계에 적을 이름, 기본은 앱 이름
+
+                if (BROWSERS.contains(app)) {
+                    // 브라우저면 탭 주소에서 호스트만 꺼내, 허용 사이트가 아니면 딴짓
+                    String host = SiteAllowList.hostOf(activeTabUrl(app));
+                    distracting = SiteAllowList.isDistractingSite(host, siteAllowList.get());
+
+                    if (distracting)
+                        statsName = SiteAllowList.siteKey(host);    // 딴짓 사이트면 www. 또는 m.을 뗀 사이트 이름으로 적음
+                } else {
+                    // 브라우저가 아니면 앱 이름으로 판정
+                    distracting = isDistracting(app, allowList.get());
+                }
+
+                System.out.println("front: " + app + " / 통계 이름 : " + statsName + " / 딴짓 : " + distracting); // 앱, 통계 이름, 딴짓 여부
                 detectionState.setCurrentAppName(app);
                 detectionState.setDistracting(distracting);
-                stats.update(app, distracting, System.currentTimeMillis()); // 통계에 지금 앱,판정,시각 전달
+                stats.update(statsName, distracting, System.currentTimeMillis()); // 통계에 지금 앱 또는 사이트 이름,판정,시각 전달
                 try {
                     Thread.sleep(1000); // 1초 대기
                 } catch (InterruptedException e) {  // 스레드 종료 신호를 받으면 루프 탈출
@@ -177,6 +199,37 @@ public class Main extends Application {
         } catch (Exception e) { // 에러 원인 콘솔에 출력
             System.err.println("frontApp 실패 : " + e.getMessage());
             return "(unknown)";
+        }
+    }
+
+    // 브라우저의 지금 탭 주소를 알아내는 메서드 / 실패하거나 2초 넘게 걸리면 null
+    private String activeTabUrl(String browser) {
+        String script = browser.equals("Safari")                                // BROWSERS에 있는 두 브라우저만 들어옴
+            ? "tell application \"Safari\" to get URL of front document"
+            : "tell application \"Google Chrome\" to get URL of active tab of front window";
+
+        try {
+            ProcessBuilder pb = new ProcessBuilder("osascript", "-e", script);
+            pb.redirectError(ProcessBuilder.Redirect.DISCARD);                  // 에러 출력은 버려서 오류 문장이 주소로 섞이지 않게
+            Process p = pb.start();                                             // osascript 실행
+            boolean finished = p.waitFor(2, TimeUnit.SECONDS);                  // 최대 2초만 기다림
+
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {    // 블록이 끝나면 자동으로 스트림 닫힘
+                if (!finished) {
+                    p.destroyForcibly();                                        // 2초 넘게 멈춘 osascript를 강제로 끝냄
+                    return null;
+                }
+                String url = r.readLine();                                      // 실행 결과에서 주소 한 줄 읽어오기
+                if (p.exitValue() != 0)                                         // 종료코드가 0이 아니면 실패
+                    return null;
+                return url;
+            }
+        } catch (InterruptedException e) {                                      // 인터럽트 상태 복원
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (Exception e) {                                                 // 에러 원인 콘솔에 출력
+            System.err.println("activeTabUrl 실패 : " + e.getMessage());
+            return null;
         }
     }
 

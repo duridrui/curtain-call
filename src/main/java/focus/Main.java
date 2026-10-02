@@ -23,8 +23,10 @@ import com.sun.jna.NativeLong;
 import java.nio.file.Path;
 
 public class Main extends Application {
-private static final String OVERLAY_TITLE = "Curtain Call Overlay";
-static final List<String> BROWSERS = List.of("Google Chrome", "Safari");
+    private static final String OVERLAY_TITLE = "Curtain Call Overlay";
+    // 탭 주소로 사이트 판정을 하는 브라우저, 이 밖의 브라우저는 앱 이름으로만 판정
+    static final List<String> BROWSERS = List.of("Google Chrome", "Safari");
+
     @Override
     public void start(Stage stage) {
         stage.setAlwaysOnTop(true);    // 항상 위에오게
@@ -70,9 +72,12 @@ static final List<String> BROWSERS = List.of("Google Chrome", "Safari");
         // 허용 목록: ~/.curtain-call/allowed-apps.txt에서 읽음(없으면 기본 목록)
         AllowList allowList = new AllowList(
             Path.of(System.getProperty("user.home"), ".curtain-call", "allowed-apps.txt"));
+
+        // 허용 사이트 목록
         SiteAllowList siteAllowList = new SiteAllowList(
             Path.of(System.getProperty("user.home"), ".curtain-call", "allowed-sites.txt"));
-            installQuitMenu(allowList, siteAllowList);
+        installQuitMenu(allowList, siteAllowList);
+
         // 감지 스레드: 1초마다 맨 앞 앱을 확인해 허용 목록과 비교
         Thread watcher = new Thread(() -> {
             while (true) {  // 프로그램이 꺼질 때 까지 반복

@@ -158,7 +158,7 @@ public class Main extends Application {
             // 설정 메뉴와 종료 메뉴 준비
             java.awt.PopupMenu trayMenu = new java.awt.PopupMenu();
             java.awt.MenuItem quitItem = new java.awt.MenuItem("종료");
-            java.awt.MenuItem settingsItem = new java.awt.MenuItem("허용 목록 설정…");
+            java.awt.MenuItem settingsItem = new java.awt.MenuItem("기본 허용 목록…");
             AllowListWindow settingsWindow = new AllowListWindow(allowList, siteAllowList);
             trayMenu.add(settingsItem);
             trayMenu.add(quitItem);

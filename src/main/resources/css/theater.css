@@ -1,0 +1,676 @@
+/* 커튼콜 화면 스타일
+   색은 커튼 사진(curtain.jpg)의 빨강과 어두운 객석 색에서 가져옴
+   움직임은 Motion.java에서 처리 */
+
+.root {
+    -fx-font-family: "System";
+    -fx-font-size: 15px;
+    -fx-background-color: #161212;
+    -cc-bg0: #0B0808;
+    -cc-bg1: #161212;
+    -cc-panel: #241A1A;
+    -cc-card2: #2A2020;
+    -cc-line: #3A2A2A;
+    -cc-red: #D4202A;
+    -cc-red-hover: #E3222B;
+    -cc-red-press: #B20209;
+    -cc-cream: #F5F3F1;
+    -cc-text2: rgba(245, 243, 241, 0.66);
+    -cc-text3: #B8AAA6;
+    -cc-glass: rgba(245, 243, 241, 0.07);
+    -cc-glass-line: rgba(245, 243, 241, 0.12);
+    -cc-paper: #F3E9DC;
+    -cc-ink: #2B1E1E;
+    -cc-gold: #C9A227;
+    -cc-gold-ink: #8A6D12;
+}
+
+/* 바탕 */
+/* 모든 화면 배경: 위쪽만 약하게 밝은 객석 */
+.screen-dim {
+    -fx-background-color: radial-gradient(center 50% 0%, radius 75%, #3A1416 0%, #1C1414 40%, #120E0E 75%, #0B0808 100%);
+}
+
+/* 글자 */
+.t-display {
+    -fx-font-size: 44px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-cream;
+}
+.t-title {
+    -fx-font-size: 28px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-cream;
+}
+.t-title-sm {
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-cream;
+}
+.t-greeting {
+    -fx-font-size: 22px;
+    -fx-text-fill: -cc-text3;
+}
+.t-body {
+    -fx-font-size: 15px;
+    -fx-text-fill: -cc-text2;
+}
+.t-row {
+    -fx-font-size: 17px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-cream;
+}
+.t-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: -cc-text3;
+}
+.t-caption {
+    -fx-font-size: 13px;
+    -fx-text-fill: -cc-text3;
+}
+.t-mono {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 17px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-cream;
+}
+.t-mono-big {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 28px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-cream;
+}
+.t-serif-num {
+    -fx-font-family: "AppleMyungjo";
+    -fx-font-size: 40px;
+    -fx-text-fill: -cc-cream;
+}
+.t-unit {
+    -fx-font-family: "AppleMyungjo";
+    -fx-font-size: 17px;
+    -fx-text-fill: -cc-text3;
+}
+.t-serif-head {
+    -fx-font-family: "AppleMyungjo";
+    -fx-font-size: 20px;
+    -fx-text-fill: #E8C98E;
+}
+.t-serif-body {
+    -fx-font-family: "AppleMyungjo";
+    -fx-font-size: 15px;
+    -fx-text-fill: -cc-text2;
+    -fx-line-spacing: 9px;
+}
+
+/* 버튼 */
+.button {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent;
+    -fx-text-fill: -cc-cream;
+    -fx-font-size: 17px;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+/* 주 버튼: 빨간 알약, 높이 56 */
+.btn-primary {
+    -fx-background-color: -cc-red;
+    -fx-background-radius: 28;
+    -fx-text-fill: #FFFFFF;
+    -fx-min-height: 56;
+    -fx-pref-height: 56;
+    -fx-padding: 0 32 0 32;
+    -fx-effect: dropshadow(gaussian, rgba(178, 2, 9, 0.28), 20, 0, 0, 6);
+}
+.btn-primary:hover {
+    -fx-background-color: -cc-red-hover;
+    -fx-effect: dropshadow(gaussian, rgba(227, 34, 43, 0.38), 28, 0, 0, 10);
+}
+.btn-primary:pressed {
+    -fx-background-color: -cc-red-press;
+    -fx-effect: null;
+}
+.btn-primary:disabled {
+    -fx-opacity: 1;
+    -fx-background-color: rgba(245, 243, 241, 0.14);
+    -fx-text-fill: rgba(245, 243, 241, 0.40);
+    -fx-effect: null;
+}
+/* 보조 버튼: 크림빛 유리 알약 */
+.btn-ghost {
+    -fx-background-color: -cc-glass;
+    -fx-background-radius: 28;
+    -fx-border-color: -cc-glass-line;
+    -fx-border-radius: 28;
+    -fx-min-height: 56;
+    -fx-pref-height: 56;
+    -fx-padding: 0 28 0 28;
+}
+.btn-ghost:hover {
+    -fx-background-color: rgba(245, 243, 241, 0.14);
+}
+.btn-ghost:disabled {
+    -fx-opacity: 1;
+    -fx-text-fill: rgba(245, 243, 241, 0.40);
+}
+/* 소형 (높이 40): 설정 창의 추가,선택 삭제 */
+.btn-small {
+    -fx-min-height: 40;
+    -fx-pref-height: 40;
+    -fx-background-radius: 20;
+    -fx-border-radius: 20;
+    -fx-font-size: 15px;
+    -fx-padding: 0 20 0 20;
+}
+/* 둥근 아이콘 버튼 (뒤로), 지름 44 */
+.btn-round {
+    -fx-background-color: -cc-glass;
+    -fx-background-radius: 22;
+    -fx-border-color: -cc-glass-line;
+    -fx-border-radius: 22;
+    -fx-min-width: 44;
+    -fx-min-height: 44;
+    -fx-pref-width: 44;
+    -fx-pref-height: 44;
+    -fx-max-width: 44;
+    -fx-max-height: 44;
+    -fx-padding: 0;
+    -fx-font-size: 20px;
+}
+.btn-round:hover {
+    -fx-background-color: rgba(245, 243, 241, 0.16);
+}
+
+/* 칩,태그,배지 */
+.chip {
+    -fx-background-color: -cc-glass;
+    -fx-background-radius: 16;
+    -fx-border-color: -cc-glass-line;
+    -fx-border-radius: 16;
+    -fx-min-height: 32;
+    -fx-pref-height: 32;
+    -fx-padding: 0 14 0 14;
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+    -fx-text-fill: -cc-text2;
+}
+.button.chip:hover {
+    -fx-background-color: rgba(245, 243, 241, 0.14);
+}
+.chip.selected, .button.chip.selected:hover {
+    -fx-background-color: -cc-red;
+    -fx-border-color: -cc-red;
+    -fx-text-fill: #FFFFFF;
+    -fx-font-weight: bold;
+}
+/* 공연 태그: 금색 테두리 상자에 영문 코드 */
+.tag {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-gold;
+    -fx-background-color: rgba(0, 0, 0, 0.35);
+    -fx-background-radius: 8;
+    -fx-border-color: -cc-gold;
+    -fx-border-width: 2;
+    -fx-border-radius: 8;
+    -fx-padding: 3 9 3 9;
+}
+.badge {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-gold;
+    -fx-background-color: rgba(201, 162, 39, 0.14);
+    -fx-background-radius: 6;
+    -fx-padding: 3 8 3 8;
+}
+.paper .badge {
+    -fx-text-fill: -cc-gold-ink;
+    -fx-background-color: rgba(201, 162, 39, 0.22);
+}
+/* 중도 종료(막이 다 닫혀 끝난 공연) 배지 */
+.badge.abort {
+    -fx-text-fill: #F0646B;
+    -fx-background-color: rgba(212, 32, 42, 0.16);
+}
+.paper .badge.abort {
+    -fx-text-fill: #B20209;
+    -fx-background-color: rgba(178, 2, 9, 0.12);
+}
+/* 관람 기록 카드의 집중 주제 */
+.topic-tag {
+    -fx-font-size: 12px;
+    -fx-text-fill: -cc-text2;
+    -fx-background-color: -cc-glass;
+    -fx-background-radius: 6;
+    -fx-padding: 2 8 2 8;
+}
+
+/* 패널,목록 행 */
+.panel {
+    -fx-background-color: rgba(36, 26, 26, 0.86);
+    -fx-background-radius: 24;
+    -fx-border-color: -cc-glass-line;
+    -fx-border-radius: 24;
+}
+.list-row {
+    -fx-min-height: 52;
+    -fx-pref-height: 52;
+    -fx-padding: 0 20 0 20;
+    -fx-alignment: center-left;
+    -fx-background-color: transparent;
+    -fx-background-radius: 0;
+    -fx-border-color: -cc-line transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+    -fx-cursor: hand;
+}
+.list-row.first {
+    -fx-border-color: transparent;
+}
+.list-row:hover {
+    -fx-background-color: rgba(245, 243, 241, 0.05);
+}
+
+/* 공연 카드 */
+.show-card {
+    -fx-background-color: rgba(20, 12, 12, 0.78);
+    -fx-background-radius: 20;
+    -fx-border-color: -cc-glass-line;
+    -fx-border-radius: 20;
+    -fx-padding: 14;
+    -fx-cursor: hand;
+}
+.show-card:hover {
+    -fx-background-color: rgba(42, 30, 30, 0.9);
+}
+.show-card .card-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-cream;
+}
+.show-card .card-sub {
+    -fx-font-size: 12px;
+    -fx-text-fill: -cc-text3;
+}
+/* 고른 카드는 윗줄이 빨간 크림색 입장권 */
+.show-card.selected {
+    -fx-background-color: -cc-paper;
+    -fx-border-color: -cc-red transparent transparent transparent;
+    -fx-border-width: 5 0 0 0;
+}
+.show-card.selected .card-title {
+    -fx-text-fill: -cc-ink;
+}
+.show-card.selected .card-sub {
+    -fx-text-fill: rgba(43, 30, 30, 0.6);
+}
+.show-card.selected .tag {
+    -fx-text-fill: -cc-gold-ink;
+    -fx-background-color: rgba(201, 162, 39, 0.12);
+}
+
+/* 눈금자 */
+.ruler-tick {
+    -fx-stroke: rgba(245, 243, 241, 0.40);
+    -fx-stroke-width: 1.5;
+}
+.ruler-tick.major {
+    -fx-stroke: rgba(245, 243, 241, 0.75);
+}
+.ruler-num {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-text3;
+}
+.ruler-num.on {
+    -fx-text-fill: -cc-cream;
+}
+
+/* 좌석 */
+.hall {
+    -fx-background-color: linear-gradient(to bottom, rgba(245, 243, 241, 0.07), rgba(245, 243, 241, 0.015));
+    -fx-border-color: rgba(245, 243, 241, 0.10);
+    -fx-border-width: 2;
+}
+.stage-bar-label {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-cream;
+}
+.seat {
+    -fx-background-color: rgba(245, 243, 241, 0.14);
+    -fx-background-radius: 10;
+    -fx-border-color: transparent;
+    -fx-border-radius: 10;
+    -fx-border-width: 2;
+    -fx-min-width: 34;
+    -fx-min-height: 34;
+    -fx-pref-width: 34;
+    -fx-pref-height: 34;
+    -fx-max-width: 34;
+    -fx-max-height: 34;
+    -fx-padding: 0;
+    -fx-font-family: "Menlo";
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: rgba(245, 243, 241, 0.62);
+}
+.seat:hover {
+    -fx-background-color: rgba(245, 243, 241, 0.26);
+}
+.seat.taken, .seat.taken:hover {
+    -fx-background-color: rgba(245, 243, 241, 0.04);
+    -fx-text-fill: transparent;
+    -fx-cursor: default;
+}
+.seat.selected, .seat.selected:hover {
+    -fx-background-color: -cc-red;
+    -fx-border-color: -cc-gold;
+    -fx-text-fill: #FFFFFF;
+}
+/* 집중 주제 칩: 고르면 크림 종이에 금색 테두리 (내 좌석의 빨강과 구분) */
+.chip.topic-chip.selected, .button.chip.topic-chip.selected:hover {
+    -fx-background-color: -cc-paper;
+    -fx-border-color: -cc-gold;
+    -fx-text-fill: -cc-ink;
+}
+.text-field.topic-input {
+    -fx-min-height: 32;
+    -fx-pref-height: 32;
+    -fx-background-radius: 16;
+    -fx-border-radius: 16;
+    -fx-font-size: 13px;
+    -fx-padding: 0 14 0 14;
+}
+.topic-count {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 12px;
+    -fx-text-fill: -cc-text3;
+}
+/* 공연 길이: 고른 길이 크게 */
+.length-readout {
+    -fx-font-size: 30px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-cream;
+}
+/* 허용 목록 단계: 체크 목록 */
+.check-list, .check-list > .viewport {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+.check-list {
+    -fx-pref-height: 300;
+}
+.check-row {
+    -fx-min-height: 40;
+    -fx-padding: 0 4 0 4;
+    -fx-border-color: transparent transparent -cc-line transparent;
+    -fx-border-width: 0 0 1 0;
+}
+.allow-check {
+    -fx-text-fill: -cc-cream;
+    -fx-font-size: 15px;
+}
+.allow-check .box {
+    -fx-background-color: rgba(245, 243, 241, 0.08);
+    -fx-background-radius: 6;
+    -fx-border-color: -cc-glass-line;
+    -fx-border-radius: 6;
+    -fx-padding: 4;
+}
+.allow-check:selected .box {
+    -fx-background-color: -cc-paper;
+    -fx-border-color: -cc-gold;
+}
+.allow-check:selected .mark {
+    -fx-background-color: -cc-ink;
+}
+.row-label {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-text3;
+}
+
+/* 종이 티켓 */
+.paper {
+    -fx-background-color: -cc-paper;
+}
+.paper-strip {
+    -fx-background-color: -cc-red;
+}
+.paper-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: rgba(43, 30, 30, 0.58);
+}
+.paper-value {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 17px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-ink;
+}
+.paper-name {
+    -fx-font-size: 17px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-ink;
+}
+.paper-big {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 44px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-ink;
+}
+.paper-title {
+    -fx-font-size: 40px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-ink;
+}
+.paper-caption {
+    -fx-font-size: 13px;
+    -fx-text-fill: rgba(43, 30, 30, 0.6);
+}
+.paper-mono-caption {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 12px;
+    -fx-text-fill: rgba(43, 30, 30, 0.6);
+}
+.admit {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -cc-gold-ink;
+}
+.tear-hint {
+    -fx-font-family: "Menlo";
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: rgba(43, 30, 30, 0.5);
+}
+.stamp-text {
+    -fx-font-family: "AppleMyungjo";
+    -fx-font-size: 22px;
+    -fx-text-fill: #B20209;
+    -fx-text-alignment: center;
+}
+
+/* 커튼콜 숫자 격자 */
+.stat-grid {
+    -fx-background-color: -cc-line;
+    -fx-background-radius: 24;
+    -fx-border-color: -cc-glass-line;
+    -fx-border-radius: 24;
+}
+.stat-cell {
+    -fx-background-color: rgba(36, 26, 26, 0.94);
+    -fx-padding: 18 22 18 22;
+}
+.rule {
+    -fx-background-color: -cc-line;
+    -fx-min-height: 1;
+    -fx-pref-height: 1;
+    -fx-max-height: 1;
+}
+.rank-row {
+    -fx-min-height: 40;
+    -fx-pref-height: 40;
+    -fx-alignment: center-left;
+    -fx-border-color: transparent transparent -cc-line transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+/* 관람 기록 */
+.record-card {
+    -fx-background-color: -cc-panel;
+    -fx-background-radius: 20;
+    -fx-border-color: -cc-glass-line;
+    -fx-border-radius: 20;
+    -fx-padding: 18 22 18 22;
+    -fx-cursor: hand;
+}
+.record-card:hover {
+    -fx-background-color: -cc-card2;
+}
+.record-card.selected {
+    -fx-background-color: #33211F;
+    -fx-border-color: -cc-glass-line -cc-glass-line -cc-glass-line -cc-red;
+    -fx-border-width: 1 1 1 4;
+}
+.time-line {
+    -fx-background-color: rgba(245, 243, 241, 0.22);
+    -fx-min-height: 1;
+    -fx-max-height: 1;
+}
+.detail-panel {
+    -fx-background-color: rgba(36, 26, 26, 0.86);
+    -fx-background-radius: 28;
+    -fx-border-color: -cc-glass-line;
+    -fx-border-radius: 28;
+    -fx-padding: 30 32 30 32;
+}
+.compare-row {
+    -fx-min-height: 42;
+    -fx-pref-height: 42;
+    -fx-alignment: center-left;
+    -fx-border-color: transparent transparent -cc-line transparent;
+    -fx-border-width: 0 0 1 0;
+}
+.scroll-pane, .scroll-pane > .viewport {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+.scroll-bar {
+    -fx-background-color: transparent;
+}
+.scroll-bar .thumb {
+    -fx-background-color: rgba(245, 243, 241, 0.18);
+    -fx-background-radius: 4;
+}
+.scroll-bar .increment-button, .scroll-bar .decrement-button {
+    -fx-padding: 0;
+}
+.scroll-bar .increment-arrow, .scroll-bar .decrement-arrow {
+    -fx-shape: null;
+    -fx-padding: 0;
+}
+
+/* 허용 목록 설정 창 */
+.settings {
+    -fx-background-color: #1E1616;
+}
+
+.quality-choice {
+    -fx-font-size: 14px;
+    -fx-text-fill: -cc-text2;
+}
+.quality-choice:disabled {
+    -fx-opacity: 0.55;
+}
+.allow-list {
+    -fx-background-color: rgba(0, 0, 0, 0.22);
+    -fx-background-radius: 20;
+    -fx-background-insets: 0;
+    -fx-border-color: -cc-glass-line;
+    -fx-border-radius: 20;
+    -fx-padding: 0;
+}
+.allow-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -cc-cream;
+    -fx-font-size: 16px;
+    -fx-pref-height: 48;
+    -fx-padding: 0 20 0 20;
+    -fx-border-color: transparent transparent -cc-line transparent;
+    -fx-border-width: 0 0 1 0;
+}
+.allow-list .list-cell:empty {
+    -fx-border-color: transparent;
+}
+.allow-list .list-cell:filled:hover {
+    -fx-background-color: rgba(245, 243, 241, 0.05);
+}
+.allow-list .list-cell:filled:selected {
+    -fx-background-color: rgba(245, 243, 241, 0.10);
+}
+.text-field {
+    -fx-background-color: rgba(245, 243, 241, 0.08);
+    -fx-background-radius: 22;
+    -fx-border-color: -cc-glass-line;
+    -fx-border-radius: 22;
+    -fx-text-fill: -cc-cream;
+    -fx-prompt-text-fill: rgba(245, 243, 241, 0.40);
+    -fx-font-size: 15px;
+    -fx-min-height: 44;
+    -fx-pref-height: 44;
+    -fx-padding: 0 18 0 18;
+    -fx-highlight-fill: rgba(212, 32, 42, 0.5);
+}
+.text-field:focused {
+    -fx-border-color: rgba(245, 243, 241, 0.55);
+    -fx-effect: dropshadow(gaussian, rgba(245, 243, 241, 0.10), 3, 1, 0, 0);
+}
+
+/* 커튼 */
+.hud-label {
+    -fx-font-size: 14px;
+    -fx-text-fill: rgba(255, 255, 255, 0.72);
+}
+.hud-num {
+    -fx-font-size: 48px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #FFFFFF;
+}
+.hud-unit {
+    -fx-font-size: 20px;
+    -fx-text-fill: rgba(255, 255, 255, 0.6);
+}
+.hud-topic {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #E8C98E;
+    -fx-padding: 0 0 4 0;
+}
+.hud {
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.6), 16, 0, 0, 2);
+}
+/* 막이 다 닫혔을 때 가운데 문구, 뒤에 어두운 얼룩을 깔아 막 위에서도 읽히게 */
+.curtain-notice {
+    -fx-background-color: radial-gradient(center 50% 50%, radius 50%, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.30) 55%, transparent 100%);
+    -fx-min-width: 560;
+    -fx-min-height: 320;
+}
+.notice-title {
+    -fx-font-size: 40px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #FFFFFF;
+}
+.notice-body {
+    -fx-font-size: 17px;
+    -fx-text-fill: rgba(255, 255, 255, 0.8);
+}

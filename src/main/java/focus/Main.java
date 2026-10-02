@@ -72,7 +72,7 @@ static final List<String> BROWSERS = List.of("Google Chrome", "Safari");
             Path.of(System.getProperty("user.home"), ".curtain-call", "allowed-apps.txt"));
         SiteAllowList siteAllowList = new SiteAllowList(
             Path.of(System.getProperty("user.home"), ".curtain-call", "allowed-sites.txt"));
-            installQuitMenu(allowList);
+            installQuitMenu(allowList, siteAllowList);
         // 감지 스레드: 1초마다 맨 앞 앱을 확인해 허용 목록과 비교
         Thread watcher = new Thread(() -> {
             while (true) {  // 프로그램이 꺼질 때 까지 반복
@@ -148,13 +148,13 @@ static final List<String> BROWSERS = List.of("Google Chrome", "Safari");
     }
 
     // 메뉴바에 아이콘 추가 (커튼에 갇혔을 때 비상구)
-    private void installQuitMenu(AllowList allowList) {
+    private void installQuitMenu(AllowList allowList, SiteAllowList siteAllowList) {
         try {
             // 설정 메뉴와 종료 메뉴 준비
             java.awt.PopupMenu trayMenu = new java.awt.PopupMenu();
             java.awt.MenuItem quitItem = new java.awt.MenuItem("종료");
             java.awt.MenuItem settingsItem = new java.awt.MenuItem("허용 목록 설정…");
-            AllowListWindow settingsWindow = new AllowListWindow(allowList);
+            AllowListWindow settingsWindow = new AllowListWindow(allowList, siteAllowList);
             trayMenu.add(settingsItem);
             trayMenu.add(quitItem);
             settingsItem.addActionListener(e -> Platform.runLater(() -> settingsWindow.show()));    // 메뉴 클릭을 화면 작업으로 넘김

@@ -27,15 +27,17 @@ public class Main extends Application {
     // 탭 주소로 사이트 판정을 하는 브라우저, 이 밖의 브라우저는 앱 이름으로만 판정
     static final List<String> BROWSERS = List.of("Google Chrome", "Safari");
 
+    // 감지 스레드와 화면이 함께 쓰는 공연 정보
+    private final DetectionState detectionState = new DetectionState();         // 감지 결과를 담을 객체
+    private final ShowSession show = new ShowSession();                         // 공연 상태와 이번 공연 통계
+    private volatile Ticket ticket;                                             // 지금 공연의 티켓
+
     @Override
     public void start(Stage stage) {
         stage.setAlwaysOnTop(true);    // 항상 위에오게
         stage.setTitle(OVERLAY_TITLE);
         stage.initStyle(StageStyle.TRANSPARENT);    // 배경 안 칠하게
         Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();    // 주 모니터의 사용 가능한 화면 크기 저장
-
-        DetectionState detectionState = new DetectionState();    // 감지 결과를 담을 객체생성
-        DistractionStats stats = new DistractionStats();    // 딴짓 통계(횟수,시간)를 모을 객체 생성
 
         // 커튼을 담을 화면 판과 투명한 Scene을 준비
         StackPane root = new StackPane();
@@ -81,6 +83,14 @@ public class Main extends Application {
         // 감지 스레드: 1초마다 맨 앞 앱을 확인해 허용 목록과 비교
         Thread watcher = new Thread(() -> {
             while (true) {  // 프로그램이 꺼질 때 까지 반복
+                // 공연 전과 마감이 끝난 뒤에는 osascript를 돌리지 않고 1초 쉼
+                if (!show.needsDetection()) {
+                    detectionState.setDistracting(false);
+                    if (!sleepOneSecond())
+                        break;
+                    continue;
+                }
+
                 String app = frontApp(); // 앱 이름을 한 번만 구해서 재사용 (osascript 두 번 실행 방지)
 
                 // 딴짓인지 판정 결과
@@ -90,29 +100,36 @@ public class Main extends Application {
                 if (BROWSERS.contains(app)) {
                     // 브라우저면 탭 주소에서 호스트만 꺼내, 허용 사이트가 아니면 딴짓
                     String host = SiteAllowList.hostOf(activeTabUrl(app));
-                    distracting = SiteAllowList.isDistractingSite(host, siteAllowList.get());
+                    distracting = SiteAllowList.isDistractingSite(host, ticket.getAllowedSites());          // 이번 공연에서 고른 사이트
 
                     if (distracting)
                         statsName = SiteAllowList.siteKey(host);    // 딴짓 사이트면 www. 또는 m.을 뗀 사이트 이름으로 적음
                 } else {
                     // 브라우저가 아니면 앱 이름으로 판정
-                    distracting = isDistracting(app, allowList.get());
+                    distracting = isDistracting(app, ticket.getAllowedApps());                              // 이번 공연에서 고른 앱
                 }
 
-                System.out.println("front: " + app + " / 통계 이름 : " + statsName + " / 딴짓 : " + distracting); // 앱, 통계 이름, 딴짓 여부
+                boolean shown = show.tick(statsName, distracting, System.currentTimeMillis());              // 공연 중이면 통계에 적고 판정 그대로, 아니면 false
+                System.out.println("front: " + app + " / 통계 이름 : " + statsName + " / 딴짓 : " + shown);    // 앱, 통계 이름, 커튼에 알릴 딴짓 여부
                 detectionState.setCurrentAppName(app);
-                detectionState.setDistracting(distracting);
-                stats.update(statsName, distracting, System.currentTimeMillis()); // 통계에 지금 앱 또는 사이트 이름,판정,시각 전달
-                try {
-                    Thread.sleep(1000); // 1초 대기
-                } catch (InterruptedException e) {  // 스레드 종료 신호를 받으면 루프 탈출
+                detectionState.setDistracting(shown);
+                if (!sleepOneSecond())                                                                     // 1초 대기, 종료 신호면 반복 끝
                     break;
-                }
             }
         });
         watcher.setDaemon(true);    // 창 닫으면 이 스레드도 같이 종료되게
         watcher.start();    // 스레드 시작
-    }   
+    }
+
+    // 1초 대기, 스레드 종료 신호를 받으면 false
+    private static boolean sleepOneSecond() {
+        try {
+            Thread.sleep(1000);                 // 1초 대기
+            return true;
+        } catch (InterruptedException e) {      // 스레드 종료 신호를 받으면 루프 탈출
+            return false;
+        }
+    }
 
     /*
     클릭이 오버레이를 그냥 통과해서 뒤에 있는 다른 앱을 누를 수 있게 하는 코드

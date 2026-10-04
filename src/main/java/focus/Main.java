@@ -34,6 +34,8 @@ public class Main extends Application {
     private final CurtainDownRule curtainDownRule = new CurtainDownRule();      // 막이 다 닫히면 중도 종료 (화면 스레드만)
     private javafx.animation.PauseTransition pendingCurtainCall;                // 중도 종료 뒤 커튼콜까지 기다리는 중
     private ShowRecord earlierActs;                                             // 공연 이어보기 중이면 앞 막까지의 기록, 아니면 null
+    private final DoNotDisturb dnd = new DoNotDisturb();                        // 방해금지 연동 (단축어 실행)
+
     @Override
     public void start(Stage stage) {
         stage.setAlwaysOnTop(true);    // 항상 위에오게

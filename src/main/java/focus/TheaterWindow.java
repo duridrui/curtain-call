@@ -3,12 +3,18 @@ package focus;
 import java.util.List;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.geometry.Pos;
+import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.StackPane;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 
 // 로비, 예매, 관람 기록, 커튼콜을 번갈아 보여 주는 극장 창 하나
 public class TheaterWindow {
+    static final double DRAPE_WIDTH = 56;       // 양옆 커튼 폭
+    static final double VALANCE_HEIGHT = 26;    // 위 가로 휘장 높이
 
     // 화면에서 누른 버튼을 Main에 넘기는 통로
     interface Actions {
@@ -26,9 +32,10 @@ public class TheaterWindow {
     // 창 만들기: 화면이 들어갈 칸을 놓고, 주 모니터에 맞춘 크기로 창을 준비함 (띄우는 일은 bringToFront)
     public TheaterWindow(Actions actions) {
         this.actions = actions;
-        StackPane root = new StackPane(content);
+        StackPane root = new StackPane(content, drapes());
         WindowSize size = sizeForPrimaryScreen();
         Scene scene = new Scene(root, size.getWidth(), size.getHeight());
+        scene.getStylesheets().add(TheaterWindow.class.getResource("/css/theater.css").toExternalForm());
         stage.setTitle("Curtain Call");
         stage.setScene(scene);
         stage.setResizable(true);
@@ -48,6 +55,34 @@ public class TheaterWindow {
     private static WindowSize sizeForPrimaryScreen() {
         javafx.geometry.Rectangle2D area = Screen.getPrimary().getVisualBounds();
         return WindowSize.theater(area.getMinX(), area.getMinY(), area.getWidth(), area.getHeight());
+    }
+
+    // 창 양쪽 끝에 걸린 벨벳 커튼(폭 56)과 위 가로 휘장(높이 26). 화면 내용 위에 얹고 클릭은 통과.
+    // 이미지는 높이 112%로 맞춰 아래 바닥 줄무늬가 안 보이게 하고 안쪽으로 그림자를 떨어뜨려 입체감을 냄
+    static StackPane drapes() {
+        StackPane layer = new StackPane();
+        layer.setMouseTransparent(true);
+        layer.setMinSize(0, 0);                         // 장식 크기가 창 크기를 따라가므로 장식이 창 크기를 붙잡지 않게 최소 크기는 0
+        if (Ui.curtainImage() == null)
+            return layer;
+        Rectangle left = new Rectangle(DRAPE_WIDTH, 0);
+        Rectangle right = new Rectangle(DRAPE_WIDTH, 0);
+        left.heightProperty().bind(layer.heightProperty());
+        right.heightProperty().bind(layer.heightProperty());
+        double imageHeight = 900 * 1.12;                                    // 창 높이 900 기준 112%
+        left.setFill(Ui.velvet(0, imageHeight));
+        right.setFill(Ui.velvet(DRAPE_WIDTH - Ui.velvetWidth(imageHeight), imageHeight));
+        left.setEffect(new DropShadow(28, 8, 0, Color.rgb(0, 0, 0, 0.65)));
+        right.setEffect(new DropShadow(28, -8, 0, Color.rgb(0, 0, 0, 0.65)));
+        StackPane.setAlignment(left, Pos.CENTER_LEFT);
+        StackPane.setAlignment(right, Pos.CENTER_RIGHT);
+        Rectangle valance = new Rectangle(0, VALANCE_HEIGHT);
+        valance.widthProperty().bind(layer.widthProperty());
+        valance.setFill(Ui.velvet(0, imageHeight));
+        valance.setEffect(new DropShadow(24, 0, 10, Color.rgb(0, 0, 0, 0.65)));
+        StackPane.setAlignment(valance, Pos.TOP_CENTER);
+        layer.getChildren().addAll(left, right, valance);
+        return layer;
     }
 
     // 창을 숨김 (공연이 시작되면 극장 창을 치우고 커튼 창만 남김)

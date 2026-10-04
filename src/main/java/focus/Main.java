@@ -31,7 +31,9 @@ public class Main extends Application {
     private final DetectionState detectionState = new DetectionState();         // 감지 결과를 담을 객체
     private final ShowSession show = new ShowSession();                         // 공연 상태와 이번 공연 통계
     private volatile Ticket ticket;                                             // 지금 공연의 티켓
-
+    private final CurtainDownRule curtainDownRule = new CurtainDownRule();      // 막이 다 닫히면 중도 종료 (화면 스레드만)
+    private javafx.animation.PauseTransition pendingCurtainCall;                // 중도 종료 뒤 커튼콜까지 기다리는 중
+    private ShowRecord earlierActs;                                             // 공연 이어보기 중이면 앞 막까지의 기록, 아니면 null
     @Override
     public void start(Stage stage) {
         stage.setAlwaysOnTop(true);    // 항상 위에오게
@@ -44,6 +46,7 @@ public class Main extends Application {
         root.setStyle("-fx-background-color: transparent;");     // 커튼 배경을 투명하게
         Scene scene = new Scene(root, screenBounds.getWidth(), screenBounds.getHeight());    // 실제 화면 크기로 Scene 생성
         scene.setFill(Color.TRANSPARENT);    // Scene 배경을 투명하게 설정
+        scene.getStylesheets().add(Main.class.getResource("/css/theater.css").toExternalForm());   // 커튼 안내 문구 모양
         stage.setScene(scene);
         CurtainOverlay curtainOverlay = new CurtainOverlay(scene.getWidth(), scene.getHeight());    // 현재 화면 크기로 커튼 객체 생성
         root.getChildren().add(curtainOverlay.getView());    // 커튼 판을 root 화면에 추가
@@ -51,13 +54,33 @@ public class Main extends Application {
         Duration interval = Duration.seconds(1);    // 실행 간격 설정
         KeyFrame keyFrame = new KeyFrame(interval, event -> {    // 1초 간격과 실행할 작업을 받는 KeyFrame 생성 시작
             boolean distracting = detectionState.isDistracting();
+            boolean running = show.isRunning();
             if (distracting) {
                 detectionState.setDistractionElapsedSeconds(detectionState.getDistractionElapsedSeconds() + 1);    // 경과 시간 증가
             } else {
                 detectionState.setDistractionElapsedSeconds(0);    // 집중 상태일 때 경과 시간 초기화
             }
-            curtainOverlay.updateCurtain(detectionState.getDistractionElapsedSeconds(), distracting);
-            System.out.println(detectionState.getDistractionElapsedSeconds());    // 시간이 되면 터미널에 증가 여부 출력
+            long elapsed = detectionState.getDistractionElapsedSeconds();
+            curtainOverlay.updateCurtain(elapsed, distracting);
+            curtainOverlay.showNotice(CurtainOverlay.isFullyClosed(elapsed, distracting));    // 다 닫히면 안내 문구
+            double progress = CurtainOverlay.closeProgress(elapsed, distracting);
+            long tickNow = System.currentTimeMillis();
+            curtainOverlay.updateHud(show.isRunning(), show.isUnlimited(), show.remainingMillis(tickNow),
+                show.elapsedMillis(tickNow), progress);    // 남은(무제한이면 지난) 시간, 닫힌 정도 표시
+
+            boolean curtainDown = curtainDownRule.onTick(running, elapsed, distracting);    // 막이 다 닫힌 첫 1초
+            if (running) {      // 임시
+                long now = System.currentTimeMillis();
+                if (show.isTimeUp(now))
+                    show.requestEnd(now);                                  // 임시: 공연 길이를 다 채우면 종료 요청
+                else if (curtainDown) {
+                    show.requestEnd(now, ShowEnding.CURTAIN_DOWN);         // 임시: 막이 다 닫히면 중도 종료 요청
+                    curtainOverlay.holdClosed();                           // 막을 닫은 채로 두고 종료 문구
+                    pendingCurtainCall = new javafx.animation.PauseTransition(Duration.millis(CurtainDownRule.CURTAIN_CALL_DELAY_MILLIS));
+                    pendingCurtainCall.setOnFinished(e -> System.out.println("임시: 커튼콜 자리"));   // 임시
+                    pendingCurtainCall.play();
+                }
+            }
         });
         Timeline timeline = new Timeline();    // 반복 실행의 일정표 객체생성
         timeline.getKeyFrames().add(keyFrame);    // timeline안에 keyFrame 추가

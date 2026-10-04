@@ -71,6 +71,7 @@ class BookingView {
     private List<String> appChoices;
     private List<String> siteChoices;
     private List<String> running = List.of();
+    private SeatMap seats;
     private String topicChip;
     private String typedTopic = "";
 
@@ -113,7 +114,7 @@ class BookingView {
         Label readout = Ui.label("", "length-readout");
         LengthRuler ruler = new LengthRuler();
         Button next = Ui.primary("좌석 고르기", 520);
-        next.setOnAction(e -> { });
+        next.setOnAction(e -> showSeats());
         HBox cards = new HBox(14);
         cards.setAlignment(Pos.BOTTOM_CENTER);
         List<VBox> cells = new ArrayList<>();
@@ -177,5 +178,137 @@ class BookingView {
         card.setPrefSize(132, 112);
         card.setMaxSize(132, 112);
         return Motion.liftOnHover(card, 2);
+    }
+
+    void showSeatsFor(ShowLength p) {
+        chosen = p;
+        showSeats();
+    }
+
+    private void showSeats() {
+        seats = new SeatMap(ROWS, COLS, seed());
+        AnchorPane s = screen("screen-dim");
+        Button back = Ui.anchor(Ui.back(this::showLengths), Ui.EDGE, null, null, Ui.EDGE);
+
+        HBox legend = new HBox(24, legendItem("빈 좌석", ""), legendItem("팔린 좌석", "taken"), legendItem("내 좌석", "selected"));
+        legend.setAlignment(Pos.CENTER);
+
+        Label pickedSeat = Ui.label("—", "t-title-sm");
+        Label pickedShow = Ui.label("", "t-body");
+        HBox pickedLine = new HBox(10, pickedSeat, pickedShow);
+        pickedLine.setAlignment(Pos.BASELINE_LEFT);
+        VBox picked = new VBox(2, Ui.label("고른 좌석", "t-label"), pickedLine);
+        Button again = Ui.ghost("길이 다시 고르기", 190);
+        again.setOnAction(e -> showLengths());
+        Button issue = Ui.primary("다음: 허용 목록", 240);
+        issue.setDisable(true);
+        HBox bottom = new HBox(12, picked, Ui.grow(), again, issue);
+        bottom.setAlignment(Pos.CENTER_LEFT);
+        bottom.setMaxWidth(HALL_WIDTH);
+
+        Runnable refresh = () -> {
+            String topic = null;
+            pickedShow.setText(LengthRuler.lengthText(chosen.getMinutes()) + (topic == null ? "" : " · " + topic));
+            issue.setDisable(seats.getSelectedName() == null || topic == null);
+        };
+        refresh.run();
+
+        GridPane grid = seatGrid(pickedSeat, refresh);
+        VBox inside = new VBox(24, stageBar(), grid);
+        inside.setAlignment(Pos.TOP_CENTER);
+        inside.setPadding(new Insets(20, 0, 0, 0));
+        Region shape = new Region();
+        shape.getStyleClass().add("hall");
+        shape.setStyle("-fx-shape: \"M0,140 A380,140 0 0 1 380,0 A380,140 0 0 1 760,140 L760,390 Q760,430 720,430 L40,430 Q0,430 0,390 Z\";");
+        StackPane hall = new StackPane(shape, inside);
+        hall.setMinSize(HALL_WIDTH, HALL_HEIGHT);
+        hall.setMaxSize(HALL_WIDTH, HALL_HEIGHT);
+        StackPane.setAlignment(inside, Pos.TOP_CENTER);
+
+        VBox column = new VBox(16, legend, hall, bottom);
+        VBox.setMargin(bottom, new Insets(14, 0, 0, 0));
+        column.setAlignment(Pos.CENTER);
+        column.setPadding(new Insets(Ui.BOTTOM, 0, Ui.BOTTOM, 0));
+        Ui.anchor(column, 0.0, Ui.EDGE, 0.0, Ui.EDGE);
+        s.getChildren().addAll(column, back);
+        Motion.rise(hall, 8, Motion.ITEM, Duration.ZERO).play();
+    }
+
+    private static StackPane stageBar() {
+        Rectangle velvet = Ui.roundRect(0, 0, 360, 30, 15);
+        velvet.setFill(Ui.velvet(-400, 240));
+        Rectangle shade = Ui.roundRect(0, 0, 360, 30, 15);
+        shade.setFill(Color.rgb(0, 0, 0, 0.30));
+        StackPane bar = new StackPane(velvet, shade, Ui.label("무    대", "stage-bar-label"));
+        bar.setMaxSize(360, 30);
+        return bar;
+    }
+
+    private GridPane seatGrid(Label pickedSeat, Runnable refresh) {
+        GridPane grid = new GridPane();
+        grid.setHgap(8);
+        grid.setVgap(9);
+        grid.setAlignment(Pos.CENTER);
+        Button[][] buttons = new Button[ROWS][COLS];
+        for (int r = 0; r < ROWS; r++) {
+            grid.add(rowLabel(r), 0, r);
+            for (int c = 0; c < COLS; c++) {
+                Button seat = new Button(String.valueOf(c + 1));
+                seat.getStyleClass().add("seat");
+                if (seats.isTaken(r, c)) {
+                    seat.getStyleClass().add("taken");
+                    seat.setText("");
+                }
+                int row = r, col = c;
+                seat.setOnAction(e -> {
+                    if (!seats.select(row, col))
+                        return;
+                    for (int rr = 0; rr < ROWS; rr++)
+                        for (int cc = 0; cc < COLS; cc++) {
+                            Button b = buttons[rr][cc];
+                            if (b.getStyleClass().remove("selected")) {
+                                b.setText(String.valueOf(cc + 1));
+                                Motion.scaleTo(b, 1, Motion.SEAT);
+                            }
+                        }
+                    seat.getStyleClass().add("selected");
+                    seat.setText(SeatMap.seatName(row, col).replace("열 ", "").replace("번", ""));
+                    Motion.scaleTo(seat, 1.12, Motion.SEAT);
+                    pickedSeat.setText(seats.getSelectedName());
+                    refresh.run();
+                });
+                buttons[r][c] = seat;
+                grid.add(seat, c + 1 + (c >= COLS / 2 ? 1 : 0), r);
+            }
+            grid.add(rowLabel(r), COLS + 2, r);
+        }
+        Region aisle = new Region();
+        aisle.setMinWidth(12);
+        grid.add(aisle, COLS / 2 + 1, 0);
+        return grid;
+    }
+
+    private static Label rowLabel(int row) {
+        Label l = Ui.label(String.valueOf((char) ('A' + row)), "row-label");
+        l.setMinWidth(28);
+        l.setAlignment(Pos.CENTER);
+        return l;
+    }
+
+    private static HBox legendItem(String text, String state) {
+        Region box = new Region();
+        box.getStyleClass().add("seat");
+        if (!state.isEmpty())
+            box.getStyleClass().add(state);
+        box.setStyle("-fx-min-width: 14px; -fx-pref-width: 14px; -fx-max-width: 14px; -fx-min-height: 14px; -fx-pref-height: 14px; -fx-max-height: 14px; -fx-background-radius: 4; -fx-border-radius: 4;");
+        HBox item = new HBox(6, box, Ui.label(text, "t-caption"));
+        item.setAlignment(Pos.CENTER);
+        return item;
+    }
+
+    private long seed() {
+        LocalDate today = LocalDate.now();
+        return today.getYear() * 10_000L + today.getMonthValue() * 100L + today.getDayOfMonth()
+            + (chosen.isUnlimited() ? 0 : chosen.getMinutes()) * 7L + 1;
     }
 }

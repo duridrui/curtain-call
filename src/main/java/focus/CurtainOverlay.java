@@ -16,10 +16,13 @@ import javafx.scene.shape.LineTo;
 import javafx.scene.shape.MoveTo;
 import javafx.scene.shape.Path;
 import javafx.scene.shape.QuadCurveTo;
+import javafx.animation.AnimationTimer;
 import javafx.animation.FadeTransition;
 import javafx.scene.control.Label;
 import javafx.scene.effect.InnerShadow;
 import javafx.scene.layout.VBox;
+import javafx.animation.AnimationTimer;
+import javafx.scene.image.ImageView;
 
 public class CurtainOverlay {
     private static final double CLOSE_DURATION_SECONDS = 30.0;      // 커튼 닫히는 시간 30초 설정
@@ -55,7 +58,31 @@ public class CurtainOverlay {
     private final Label leftTitle = new Label("남은 시간");    // HUD 왼쪽 제목 (무제한 공연이면 지난 시간)
     private final Label noticeBody = new Label(NOTICE_BODY);
 
+    // Blender 프레임 커튼. frames가 null이면 사진 커튼만 쓰고 아래 필드는 쓰지 않는다.
+    // 사진 커튼의 두 Rectangle은 숨긴 채 그대로 움직이고(닫힘, 다시 열림, 붙잡기 규칙을 그대로 씀), 그 위치를 닫힘 장 번호로 바꿔 보인다
+    private final BlenderCurtain frames;
+    private final ImageView leftFrame = new ImageView();
+    private final ImageView rightFrame = new ImageView();
+    private javafx.scene.image.WritableImage leftPixels, rightPixels;     // 장마다 픽셀만 바꿔 쓰는 그림 두 장
+    private javafx.scene.image.PixelBuffer<java.nio.IntBuffer> leftBuffer, rightBuffer;   // 위 그림의 픽셀 (풀린 장과 같은 형식)
+    private int[] reopenPlan;                   // 다시 열림 동안 1/30초마다 보일 닫힘 장 (시작할 때 정함, 아니면 null)
+    private long reopenStart;
+    private int frameWidth, frameHeight;
+    private FrameSides closedSides, openSides;  // 닫힘 / 막 오름 장 (좌우 반쪽씩 디코드 창)
+    private int targetFrame = -1;               // 보이려는 장 번호 (지금 재생 중인 쪽: 닫힘 또는 막 오름)
+    private int shownFrame = -1;                // 화면에 보이는 장 번호
+    private int closedStep = 1;                 // 닫힘 장이 움직이는 방향 (미리 디코드할 쪽)
+    private boolean raisingFrames;              // 막 오름 장을 재생하는 중 (닫힘 장 갱신을 멈춤)
+    private AnimationTimer raiseTimer;
+
     public CurtainOverlay(double screenWidth, double screenHeight) {
+        this(screenWidth, screenHeight, BlenderCurtain.load(BlenderCurtain.ROOT));
+    }
+
+    // frames: Blender 프레임 (null이면 사진 커튼)
+    CurtainOverlay(double screenWidth, double screenHeight, BlenderCurtain frames) {
+        long setUpStart = System.nanoTime();
+        this.frames = frames;
         leftCurtain.setWidth(screenWidth / 2);    // 왼쪽 커튼 가로 길이 설정
         leftCurtain.setHeight(screenHeight);    // 왼쪽 커튼 세로 길이 설정
         rightCurtain.setWidth(screenWidth / 2);    // 오른쪽 커튼 가로 길이 설정
@@ -63,7 +90,8 @@ public class CurtainOverlay {
         leftTransition.setInterpolator(Interpolator.LINEAR);
         rightTransition.setInterpolator(Interpolator.LINEAR);       // 양쪽 커튼 일정한 속도로 설정
 
-        java.net.URL imageUrl = CurtainOverlay.class.getResource("/images/curtain.jpg");    // 커튼 이미지 주소 찾기
+        java.net.URL imageUrl = frames != null ? null    // Blender 커튼이면 사진을 읽지도 굽지도 않음
+            : CurtainOverlay.class.getResource("/images/curtain.jpg");    // 커튼 이미지 주소 찾기
         Color curtainColor = Color.rgb(0, 0, 0, 0.8);    // 커튼 이미지 로딩 실패 시 검은색 커튼 불투명도 80%
         leftCurtain.setFill(curtainColor);
         rightCurtain.setFill(curtainColor);     // 양쪽 커튼에 기본 검은색을 먼저 적용
@@ -77,14 +105,21 @@ public class CurtainOverlay {
 
         leftCurtain.setEffect(new InnerShadow(34, -26, 0, Color.rgb(0, 0, 0, 0.42)));     // 안쪽 가장자리 그림자
         rightCurtain.setEffect(new InnerShadow(34, 26, 0, Color.rgb(0, 0, 0, 0.42)));
-        bake(leftCurtain);      // 사진 채우기와 그림자를 그림 한 장으로 미리 그려 두고, 움직일 때는 그 그림만 옮김
-        bake(rightCurtain);
-        leftCurtain.translateXProperty().addListener((obs, was, now) -> roundInnerCorner(leftCurtain, true));
-        rightCurtain.translateXProperty().addListener((obs, was, now) -> roundInnerCorner(rightCurtain, false));
-
+        if (frames == null) {
+            bake(leftCurtain);      // 사진 채우기와 그림자를 그림 한 장으로 미리 그려 두고, 움직일 때는 그 그림만 옮김
+            bake(rightCurtain);
+            leftCurtain.translateXProperty().addListener((obs, was, now) -> roundInnerCorner(leftCurtain, true));
+            rightCurtain.translateXProperty().addListener((obs, was, now) -> roundInnerCorner(rightCurtain, false));
+        }
         StackPane.setAlignment(leftCurtain, Pos.CENTER_LEFT);    // 커튼을 각 화면 끝에 정렬
         StackPane.setAlignment(rightCurtain, Pos.CENTER_RIGHT);
         view.getChildren().addAll(leftCurtain, rightCurtain);    // 두 커튼을 view 안에 추가
+        if (frames != null)
+            setUpFrames(screenWidth / 2, screenHeight);
+        System.out.println(frames != null
+            ? "커튼: Blender 본렌더_v2 (닫힘 " + frames.left().count() + "장, 막 오름 " + frames.openLeft().count() + "장, 준비 "
+                + (System.nanoTime() - setUpStart) / 1_000_000 + "ms, 장 바이트는 백그라운드로 올림)"
+            : "커튼: 사진 커튼 (Blender 프레임을 못 찾았거나 끔: " + BlenderCurtain.ROOT + ")");
 
         noticeTitle.getStyleClass().add("notice-title");
         noticeBody.getStyleClass().add("notice-body");
@@ -111,6 +146,309 @@ public class CurtainOverlay {
 
     public StackPane getView() {    // Main이 커튼 판을 가져갈 수 있게 반환
         return view;
+    }
+
+    // Blender 프레임 커튼
+    // 디스크: 앱 시작 때 압축 PNG 바이트를 백그라운드로 메모리에 올림 (FrameBytes).
+    // 디코드: 그릴 장보다 AHEAD장 앞서 다른 스레드에서 픽셀 배열로 풀어 둠 (FrameWindow, PngDecoder). 풀린 장은 몇십 장만 들고 있고,
+    // 놓은 배열은 pixelPool로 돌려 다음 디코드에 다시 씀 (버리는 큰 배열이 없어야 GC 멈춤이 없음).
+    // 그리기: 그림(WritableImage) 두 장의 픽셀만 바꿔 씀. 장마다 새 Image를 끼우면 그래픽 메모리를 새로 잡다가 전체 GC로 멈춘다.
+    // 그림은 풀린 장과 같은 형식(PixelBuffer, premultiplied ARGB)이라 바꿀 때 형식 변환 없이 복사만 함
+    // 다시 열림(1.2초에 수백 장): 시작할 때 1/30초 일정을 정해 그 장들을 미리 풀고 일정대로 보임
+    // 고정: 닫힘 시작 장, 다 닫힌 장, 막 오름 시작 장은 늘 풀어 두어 막 오름이 첫 장 대기 없이 시작함
+
+    private static final int AHEAD = 12;        // 앞서 풀어 둘 장 수 (30fps로 0.4초, 다른 일로 CPU가 바쁠 때 버틸 여유)
+    private static final int SPARE = 4;         // 지난 장을 남겨 둘 수 (빨리 움직일 때 가까운 장으로 대신 보임)
+    private static final int POOL_LIMIT = 24;   // 다시 쓸 픽셀 배열을 모아 둘 수 (한 장 960x1080 약 4MB)
+    private final java.util.concurrent.ConcurrentLinkedQueue<int[]> pixelPool = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private static final java.util.concurrent.ExecutorService DECODER =
+        java.util.concurrent.Executors.newFixedThreadPool(4, r -> {
+            Thread t = new Thread(r, "curtain-decode");
+            t.setDaemon(true);
+            return t;
+        });
+
+    // 왼쪽, 오른쪽 반쪽 장을 같은 번호로 함께 다룸
+    private final class FrameSides {
+        final FrameBytes leftBytes, rightBytes;
+        final FrameWindow<int[]> left, right;
+
+        FrameSides(CurtainFrames l, CurtainFrames r, int width, int height) {
+            leftBytes = new FrameBytes(paths(l));
+            rightBytes = new FrameBytes(paths(r));
+            left = new FrameWindow<>(l.count(), AHEAD, SPARE, i -> PngDecoder.decode(leftBytes.stream(i), width, height, pixelPool.poll()),
+                DECODER, i -> decoded(), this::recycle);
+            right = new FrameWindow<>(r.count(), AHEAD, SPARE, i -> PngDecoder.decode(rightBytes.stream(i), width, height, pixelPool.poll()),
+                DECODER, i -> decoded(), this::recycle);
+        }
+
+        private void recycle(int[] pixels) {
+            if (pixelPool.size() < POOL_LIMIT)
+                pixelPool.offer(pixels);
+        }
+
+        void pin(int... indices) {
+            left.pin(indices);
+            right.pin(indices);
+        }
+
+        void aim(int index, int step) {
+            left.aim(index, step);
+            right.aim(index, step);
+        }
+
+        void aimList(java.util.List<Integer> want) {
+            left.aimList(want);
+            right.aimList(want);
+        }
+
+        boolean ready(int i) {
+            return left.get(i) != null && right.get(i) != null;
+        }
+
+        // target에서 toward 쪽으로 가며 두 반쪽이 다 풀린 첫 장, 없으면 -1
+        int nearestReady(int target, int toward) {
+            int dir = toward >= target ? 1 : -1;
+            for (int i = target; i != toward + dir; i += dir)
+                if (ready(i))
+                    return i;
+            return -1;
+        }
+
+        void release() {
+            left.release();
+            right.release();
+        }
+
+        void loadAllBytes() {
+            leftBytes.loadAll();
+            rightBytes.loadAll();
+        }
+
+        long loadedBytes() {
+            return leftBytes.loadedBytes() + rightBytes.loadedBytes();
+        }
+    }
+
+    private static java.util.List<java.nio.file.Path> paths(CurtainFrames frames) {
+        java.util.List<java.nio.file.Path> out = new java.util.ArrayList<>();
+        for (int i = 0; i < frames.count(); i++)
+            out.add(frames.path(i));
+        return out;
+    }
+
+    // 반쪽 그림 두 장을 각 화면 끝에 두고, 장 번호에 맞는 그림을 끼워 보임
+    private void setUpFrames(double halfWidth, double height) {
+        leftCurtain.setVisible(false);      // 위치만 쓰고 그리지는 않음
+        rightCurtain.setVisible(false);
+        for (ImageView v : new ImageView[] {leftFrame, rightFrame}) {
+            v.setFitWidth(halfWidth);
+            v.setFitHeight(height);
+            v.setVisible(false);
+            v.setMouseTransparent(true);
+        }
+        StackPane.setAlignment(leftFrame, Pos.CENTER_LEFT);
+        StackPane.setAlignment(rightFrame, Pos.CENTER_RIGHT);
+        view.getChildren().addAll(leftFrame, rightFrame);
+        java.util.List<Integer> size = PngDecoder.size(new FrameBytes(java.util.List.of(frames.left().path(0))).stream(0));
+        frameWidth = size.get(0);       // 렌더 크기(960x1080) 그대로 풀고, 창 반쪽 크기로 늘리는 건 ImageView(그래픽 카드)가 함
+        frameHeight = size.get(1);
+        leftBuffer = pixelBuffer(frameWidth, frameHeight);
+        rightBuffer = pixelBuffer(frameWidth, frameHeight);
+        leftPixels = new javafx.scene.image.WritableImage(leftBuffer);
+        rightPixels = new javafx.scene.image.WritableImage(rightBuffer);
+        leftFrame.setImage(leftPixels);
+        rightFrame.setImage(rightPixels);
+        closedSides = new FrameSides(frames.left(), frames.right(), frameWidth, frameHeight);
+        openSides = new FrameSides(frames.openLeft(), frames.openRight(), frameWidth, frameHeight);
+        int[] raiseStart = new int[AHEAD + 1];      // 막 오름 시작 13장: 앞서 풀기가 따라붙을 때까지 늘 풀어 둠
+        for (int i = 0; i <= AHEAD; i++)
+            raiseStart[i] = i;
+        openSides.pin(raiseStart);
+        closedSides.pin(0, 1, 2, 3);                                                // 닫힘 시작 (뒤는 창이 따라잡음)
+        closedSides.pin(CurtainFrames.closedIndex(1, frames.left().count()));     // 다 닫혀 머무는 장
+        preloadBytes();
+        leftCurtain.translateXProperty().addListener((obs, was, now) -> showClosedFrame());
+    }
+
+    private static javafx.scene.image.PixelBuffer<java.nio.IntBuffer> pixelBuffer(int width, int height) {
+        java.nio.IntBuffer pixels = java.nio.ByteBuffer.allocateDirect(width * height * 4)
+            .order(java.nio.ByteOrder.nativeOrder()).asIntBuffer();
+        return new javafx.scene.image.PixelBuffer<>(width, height, pixels, javafx.scene.image.PixelFormat.getIntArgbPreInstance());
+    }
+
+    // 그림 한 장의 픽셀을 풀린 장으로 바꿈 (FX 스레드)
+    private static void copy(javafx.scene.image.PixelBuffer<java.nio.IntBuffer> target, int[] pixels) {
+        target.updateBuffer(b -> {
+            java.nio.IntBuffer buffer = b.getBuffer();
+            buffer.clear();
+            buffer.put(pixels);
+            buffer.rewind();    // 그래픽 카드로 올릴 때 처음부터 읽음 (안 되돌리면 "0 elements remain"으로 올리기 실패)
+            return null;        // 그림 전체가 바뀜
+        });
+    }
+
+    // 압축 PNG 바이트를 백그라운드로 다 올림 (막 오름 먼저). 힙이 모자라면 올리지 않고 장마다 파일에서 읽음(디코드는 그대로 앞서 함)
+    private void preloadBytes() {
+        long need = 0;
+        for (CurtainFrames f : new CurtainFrames[] {frames.left(), frames.right(), frames.openLeft(), frames.openRight()})
+            for (int i = 0; i < f.count(); i++)
+                need += f.path(i).toFile().length();
+        long headroom = 512L << 20;
+        if (Runtime.getRuntime().maxMemory() < need + headroom) {
+            System.out.printf("커튼: 힙 %dMB가 장 바이트 %dMB + 여유 512MB보다 작아 미리 올리지 않음 (장마다 파일에서 읽음)%n",
+                Runtime.getRuntime().maxMemory() >> 20, need >> 20);
+            return;
+        }
+        Thread t = new Thread(() -> {
+            long t0 = System.nanoTime();
+            openSides.loadAllBytes();
+            closedSides.loadAllBytes();
+            System.out.printf("커튼: 장 바이트 %dMB 올림 (%.1f초)%n",
+                (openSides.loadedBytes() + closedSides.loadedBytes()) >> 20, (System.nanoTime() - t0) / 1e9);
+        }, "curtain-bytes");
+        t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
+        t.start();
+    }
+
+    // 디코드 스레드에서 한 장이 풀림: 보이려던 장이 늦게 풀렸으면 그때 보임
+    private void decoded() {
+        Platform.runLater(() -> {
+            if (targetFrame >= 0 && shownFrame != targetFrame)
+                show(raisingFrames ? openSides : closedSides, targetFrame);
+        });
+    }
+
+    // 숨긴 왼쪽 Rectangle 위치(-폭 = 열림, 0 = 닫힘)를 닫힘 장으로 바꿔 보임
+    private void showClosedFrame() {
+        if (raisingFrames)
+            return;
+        int count = frames.left().count();
+        if (reopenPlan != null && showReopenFrame())
+            return;
+        double progress = 1 + leftCurtain.getTranslateX() / leftCurtain.getWidth();
+        int index = CurtainFrames.closedIndex(progress, count);
+        if (index == 0) {       // 다 열림: 그리지 않고 지난 장도 놓음 (0번 장은 가장자리 9px뿐)
+            hideFrames();
+            closedSides.release();
+            return;
+        }
+        if (targetFrame >= 0 && index != targetFrame)
+            closedStep = index - targetFrame;       // 다음 펄스에 움직일 만큼 (빨리 열릴 때는 건너뛸 간격)
+        closedSides.aim(index, closedStep);
+        show(closedSides, index);
+    }
+
+    // 다시 열림 시작 (updateCurtain이 FX 스레드에서 부름): 지금 닫힌 정도에서 1.2초 일정을 정하고 앞쪽 장부터 풀기 시작
+    private void startReopenPlan() {
+        double from = 1 + leftCurtain.getTranslateX() / leftCurtain.getWidth();
+        if (from <= 0) {
+            reopenPlan = null;
+            return;
+        }
+        reopenPlan = CurtainFrames.reopenSchedule(from, OPEN_SECONDS, 30, frames.left().count(),
+            t -> Motion.EASE_IN_OUT.interpolate(0.0, 1.0, t));
+        reopenStart = System.nanoTime();
+        closedSides.aimList(planFrom(0));
+    }
+
+    // 일정의 j번째부터 AHEAD장 (먼저 보일 장부터 풂)
+    private java.util.List<Integer> planFrom(int j) {
+        java.util.List<Integer> want = new java.util.ArrayList<>();
+        for (int k = j; k < reopenPlan.length && want.size() <= AHEAD; k++)
+            if (!want.contains(reopenPlan[k]))
+                want.add(reopenPlan[k]);
+        return want;
+    }
+
+    // 다시 열림 중이면 일정의 장을 보이고 true. 일정이 끝났으면 false (그 뒤는 숨긴 Rectangle 위치대로)
+    private boolean showReopenFrame() {
+        int j = (int) ((System.nanoTime() - reopenStart) / 1e9 * 30);
+        if (j >= reopenPlan.length - 1) {
+            reopenPlan = null;
+            return false;
+        }
+        int index = reopenPlan[j];
+        if (index == 0) {
+            hideFrames();
+            closedSides.release();
+            return true;
+        }
+        closedSides.aimList(planFrom(j));
+        show(closedSides, index);
+        return true;
+    }
+
+    // index 장을 보임. 아직 안 풀렸으면 지금 보이는 장 쪽으로 가장 가까운 풀린 장을 대신 보이고, 늦게 풀리면 decoded()가 다시 부름
+    private void show(FrameSides sides, int index) {
+        targetFrame = index;
+        if (index == shownFrame)
+            return;
+        int pick = sides.ready(index) ? index : sides.nearestReady(index, shownFrame >= 0 ? shownFrame : index);
+        if (pick < 0 || pick == shownFrame)
+            return;     // 대신 보일 장도 없음: 앞 장을 그대로 둠 (숨겨 둔 그림이면 지난 장이 비치지 않게 계속 숨김)
+        copy(leftBuffer, sides.left.get(pick));
+        copy(rightBuffer, sides.right.get(pick));
+        shownFrame = pick;
+        leftFrame.setVisible(true);
+        rightFrame.setVisible(true);
+    }
+
+    private void hideFrames() {
+        leftFrame.setVisible(false);       // 그림은 그대로 두고 숨김 (다음에 보일 때 첫 장으로 덮어씀)
+        rightFrame.setVisible(false);
+        forgetFrames();
+    }
+
+    // 닫힘과 막 오름이 서로 바뀔 때: 장 번호를 잊음 (화면의 그림은 다음 장을 보일 때까지 그대로)
+    private void forgetFrames() {
+        targetFrame = -1;
+        shownFrame = -1;
+        closedStep = 1;
+    }
+
+    // 막 오름: open_00~ 를 흐른 시간 순서로 RAISE_SECONDS 동안 재생. appear초가 있으면 그 동안 첫 장이 나타남
+    private void raiseFrames(double appear) {
+        stopFrameRaise();
+        reopenPlan = null;
+        raisingFrames = true;
+        forgetFrames();
+        closedSides.release();
+        int count = frames.openLeft().count();
+        raiseTimer = new AnimationTimer() {
+            private long start = -1;
+
+            @Override
+            public void handle(long now) {
+                if (start < 0)
+                    start = now;
+                double t = (now - start) / 1e9;
+                double opacity = appear > 0 ? Math.min(1, t / appear) : 1;
+                leftFrame.setOpacity(opacity);
+                rightFrame.setOpacity(opacity);
+                int index = CurtainFrames.openIndexAt(t - appear, RAISE_SECONDS, count);
+                openSides.aim(index, 1);
+                show(openSides, index);
+                if (t >= appear + RAISE_SECONDS)
+                    stopFrameRaise();
+            }
+        };
+        raiseTimer.start();
+    }
+
+    // 막 오름 재생을 멈추고 숨긴 Rectangle 위치대로 닫힘 장(다 열렸으면 숨김)으로 돌아감
+    private void stopFrameRaise() {
+        if (raiseTimer == null)
+            return;
+        raiseTimer.stop();
+        raiseTimer = null;
+        raisingFrames = false;
+        forgetFrames();
+        leftFrame.setOpacity(1);
+        rightFrame.setOpacity(1);
+        openSides.release();
+        showClosedFrame();
     }
 
     // 닫힌 정도(0.0~1.0): 딴짓 경과 초를 닫힘 시간으로 나눈 값, 집중 중이면 0
@@ -198,6 +536,12 @@ public class CurtainOverlay {
                 return;    // 같은 자리로 가는 중이면 다시 시작하지 않음 (1초마다 다시 걸면 움직임이 끊김)
             lastTarget = curtainOffset;
             boolean opening = closeProgress == 0.0;     // 다시 열 때는 부드러운 곡선, 닫힐 때는 1초마다 일정한 속도
+            if (frames != null) {
+                if (opening)
+                    startReopenPlan();      // Blender 커튼: 다시 열림은 정해 둔 일정대로 장을 보임
+                else
+                    reopenPlan = null;
+            }
             Duration time = opening ? Duration.seconds(OPEN_SECONDS) : Duration.seconds(1);
             Interpolator curve = opening ? Motion.EASE_IN_OUT : Interpolator.LINEAR;
             leftTransition.setDuration(time);
@@ -236,6 +580,11 @@ public class CurtainOverlay {
         rightTransition.setToX(0);
         leftTransition.playFromStart();
         rightTransition.playFromStart();
+        if (frames != null) {
+            reopenPlan = null;
+            stopFrameRaise();       // 막 오름 중이었으면 멈추고 지금 위치의 닫힘 장으로
+            showClosedFrame();      // 이미 닫힌 자리였으면 위치 변화 알림이 없으므로 직접
+        }
         noticeTitle.setText(ENDED_TITLE);
         noticeBody.setText(ENDED_BODY);
         showNotice(true);
@@ -278,6 +627,11 @@ public class CurtainOverlay {
         left.setToX(-leftCurtain.getWidth());
         right.setToX(rightCurtain.getWidth());
         javafx.animation.ParallelTransition open = new javafx.animation.ParallelTransition(left, right);
+        if (frames != null) {
+            open.play();            // 숨긴 Rectangle은 같은 시간에 열린 자리로 (다음 닫힘, 다시 열림 규칙이 이 위치를 씀)
+            raiseFrames(appear);    // 보이는 건 렌더한 막 오름 장
+            return;
+        }
         if (wasClosed) {
             open.play();
             return;

@@ -22,12 +22,16 @@ public class TheaterWindow {
         void openSettings();            // 허용 목록 설정 창
         void quit();                    // 앱 종료
         List<ShowRecord> history();     // 관람 기록 (최근 순)
+        BookingView.Lists lists();      // 예매의 허용 목록 단계가 쓰는 목록
+        List<String> runningApps();     // 지금 실행 중인 앱 (허용 목록 단계)
     }
 
     private final Stage stage = new Stage();
     private final StackPane content = new StackPane();     // 지금 화면이 들어가는 칸
     private final Actions actions;
+    private Boolean dndReady;                              // 방해금지 연동 단축어가 있는지, 확인 전이면 null
     private boolean placed;                                // 화면 가운데에 한 번 놓았는지 (그 뒤엔 사용자가 옮긴 자리 유지)
+    private boolean onLobby;                               // 지금 로비 화면인지
 
     // 창 만들기: 화면이 들어갈 칸을 놓고, 주 모니터에 맞춘 크기로 창을 준비함 (띄우는 일은 bringToFront)
     public TheaterWindow(Actions actions) {
@@ -83,6 +87,35 @@ public class TheaterWindow {
         StackPane.setAlignment(valance, Pos.TOP_CENTER);
         layer.getChildren().addAll(left, right, valance);
         return layer;
+    }
+
+    // 로비에 보여 줄 방해금지 준비 상태 (Main이 단축어를 확인한 뒤 알려 줌)
+    public void setDndReady(boolean ready) {
+        dndReady = ready;
+    }
+
+    // 로비 화면: 방해금지 준비 상태, 마지막 공연, 예매, 설정, 종료
+    public void showLobby() {
+        onLobby = true;
+        List<ShowRecord> history = actions.history();
+        setContent(new LobbyView(dndReady, history.isEmpty() ? null : history.get(0), history.size(),
+            this::showBooking, () -> { }, actions::openSettings, actions::quit).build());   // 관람 기록 화면(HistoryView)이 생기면 this::showHistory
+        bringToFront(false);
+    }
+
+    // 로비를 보고 있을 때만 새로 그림 (방해금지 연동 확인처럼 늦게 끝나는 작업이 예매 중인 화면을 로비로 되돌리지 않게)
+    public void refreshLobby() {
+        if (onLobby && stage.isShowing())
+            showLobby();
+    }
+
+    // 예매 화면: 티켓을 찢으면 극장 창을 숨기고 공연 시작
+    public void showBooking() {
+        onLobby = false;
+        setContent(new BookingView(ticket -> {
+            stage.hide();
+            actions.enter(ticket);
+        }, this::showLobby, actions.lists(), actions::runningApps).build());
     }
 
     // 창을 숨김 (공연이 시작되면 극장 창을 치우고 커튼 창만 남김)

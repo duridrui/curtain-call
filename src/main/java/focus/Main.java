@@ -26,6 +26,8 @@ public class Main extends Application {
     private static final String OVERLAY_TITLE = "Curtain Call Overlay";
     // 탭 주소로 사이트 판정을 하는 브라우저, 이 밖의 브라우저는 앱 이름으로만 판정
     static final List<String> BROWSERS = List.of("Google Chrome", "Safari");
+    // 실행 중인 앱 읽기 (예매의 허용 목록 단계가 고를 앱 목록)
+    static java.util.function.Supplier<List<String>> runningAppsReader = ShowAllowList::runningApps;
 
     // 감지 스레드와 화면이 함께 쓰는 공연 정보
     private final DetectionState detectionState = new DetectionState();         // 감지 결과를 담을 객체
@@ -35,11 +37,15 @@ public class Main extends Application {
     private javafx.animation.PauseTransition pendingCurtainCall;                // 중도 종료 뒤 커튼콜까지 기다리는 중
     private ShowRecord earlierActs;                                             // 공연 이어보기 중이면 앞 막까지의 기록, 아니면 null
     private final DoNotDisturb dnd = new DoNotDisturb();                        // 방해금지 연동 (단축어 실행)
+    // 관람 기록 저장소: ~/.curtain-call/history (로비의 마지막 공연, 관람 기록 화면)
+    private final HistoryStore history = new HistoryStore(
+        Path.of(System.getProperty("user.home"), ".curtain-call", "history"));
     private CurtainOverlay curtainOverlay;                                      // 커튼 판 (공연 시작, 종료 때 막을 올리고 붙잡음)
     private TheaterWindow theaterWindow;                                        // 로비, 예매 화면을 띄우는 극장 창
     private EndButton endButton;                                                // 막이 내려오는 동안 화면 왼쪽 아래 공연 종료 버튼
     private java.awt.TrayIcon trayIcon;                                         // 메뉴바 아이콘 (남은 시간 툴팁)
     private java.awt.MenuItem endItem;                                          // 메뉴바 '공연 종료' (공연 중에만 켬)
+    private volatile boolean quitAfterCurtainCall;                              // 공연 중 '종료'를 눌렀으면 커튼콜 뒤에 앱을 끝냄
 
     @Override
     public void start(Stage stage) {
@@ -102,14 +108,36 @@ public class Main extends Application {
         enableMacClickThrough();
         endButton = new EndButton(() -> endShow(System.currentTimeMillis()));    // 길게 누르면 메뉴바 '공연 종료'와 같은 동작
 
-        // 허용 목록: ~/.curtain-call/allowed-apps.txt에서 읽음(없으면 기본 목록)
-        AllowList allowList = new AllowList(
-            Path.of(System.getProperty("user.home"), ".curtain-call", "allowed-apps.txt"));
+        // 기본 허용 목록: ~/.curtain-call/allowed-apps.txt, allowed-sites.txt (예매할 때 미리 체크되는 목록)
+        Path home = Path.of(System.getProperty("user.home"), ".curtain-call");
+        AllowList allowList = new AllowList(home.resolve("allowed-apps.txt"));
+        SiteAllowList siteAllowList = new SiteAllowList(home.resolve("allowed-sites.txt"));
+        // 지난 공연에서 고른 목록 (다음 예매에서 미리 체크)
+        BookingView.Lists lists = new BookingView.Lists(allowList, siteAllowList,
+            home.resolve("last-show-apps.txt"), home.resolve("last-show-sites.txt"));
 
-        // 허용 사이트 목록
-        SiteAllowList siteAllowList = new SiteAllowList(
-            Path.of(System.getProperty("user.home"), ".curtain-call", "allowed-sites.txt"));
-        installQuitMenu(allowList, siteAllowList);
+        AllowListWindow settingsWindow = new AllowListWindow(allowList, siteAllowList);
+        theaterWindow = new TheaterWindow(new TheaterWindow.Actions() {
+            public void enter(Ticket t) { startShow(t); }
+            public void openSettings() { settingsWindow.show(); }
+            public void quit() { quitApp(); }
+            public List<ShowRecord> history() { return history.list(); }
+            public BookingView.Lists lists() { return lists; }
+            public List<String> runningApps() { return runningAppsReader.get(); }
+        });
+        installQuitMenu(settingsWindow);
+        theaterWindow.showLobby();      // 앱을 켜면 로비부터 (감지는 공연 중에만)
+
+        Thread checker = new Thread(() -> {     // 방해금지 연동 단축어가 있는지 한 번 확인 (최대 2초)
+            boolean ready = DoNotDisturb.isReady();
+            Platform.runLater(() -> {
+                theaterWindow.setDndReady(ready);
+                if (!show.isRunning())
+                    theaterWindow.refreshLobby();     // 로비를 보고 있을 때만 단축어 상태를 새로 그림
+            });
+        });
+        checker.setDaemon(true);
+        checker.start();
 
         // 감지 스레드: 1초마다 맨 앞 앱을 확인해 허용 목록과 비교
         Thread watcher = new Thread(() -> {
@@ -158,6 +186,7 @@ public class Main extends Application {
             pendingCurtainCall.stop();      // 직전 공연의 커튼콜 대기가 남아 있으면 버림
         curtainOverlay.releaseHold();
         ticket = t;
+        quitAfterCurtainCall = false;
         detectionState.setDistracting(false);
         detectionState.setDistractionElapsedSeconds(0);
         show.start(System.currentTimeMillis(), t.getLength(), t.getTopic());
@@ -191,6 +220,21 @@ public class Main extends Application {
         earlierActs = record;
         theaterWindow.hide();
         startShow(ticket.withLength(rest));
+    }
+
+    // 종료: 공연 중이면 공연을 먼저 끝내고(방해금지 끄기, 기록) 커튼콜 뒤에 앱을 끝냄
+    private void quitApp() {
+        if (show.isRunning()) {
+            quitAfterCurtainCall = true;
+            endShow(System.currentTimeMillis());
+            return;
+        }
+        exitNow();
+    }
+
+    private void exitNow() {
+        Platform.exit();
+        System.exit(0);
     }
 
     // 오래 걸릴 수 있는 일(단축어 실행)을 화면 스레드 밖에서 돌림
@@ -261,7 +305,7 @@ public class Main extends Application {
     }
 
     // 메뉴바에 아이콘 추가 (커튼에 갇혔을 때 비상구)
-    private void installQuitMenu(AllowList allowList, SiteAllowList siteAllowList) {
+    private void installQuitMenu(AllowListWindow settingsWindow) {
         try {
             // 공연 종료, 설정, 종료 메뉴 준비
             java.awt.PopupMenu trayMenu = new java.awt.PopupMenu();
@@ -269,18 +313,14 @@ public class Main extends Application {
             endItem.setEnabled(false);          // 앱을 켰을 땐 공연 전
             java.awt.MenuItem quitItem = new java.awt.MenuItem("종료");
             java.awt.MenuItem settingsItem = new java.awt.MenuItem("기본 허용 목록…");
-            AllowListWindow settingsWindow = new AllowListWindow(allowList, siteAllowList);
             trayMenu.add(endItem);
             trayMenu.addSeparator();
             trayMenu.add(settingsItem);
             trayMenu.add(quitItem);
             settingsItem.addActionListener(e -> Platform.runLater(() -> settingsWindow.show()));    // 메뉴 클릭을 화면 작업으로 넘김
             endItem.addActionListener(e -> Platform.runLater(() -> endShow(System.currentTimeMillis())));
-            // "종료"를 누르면 할 일
-            quitItem.addActionListener(e -> {
-                Platform.exit();
-                System.exit(0);
-            });
+            // "종료"를 누르면 할 일 (공연 중이면 공연을 먼저 끝냄)
+            quitItem.addActionListener(e -> Platform.runLater(this::quitApp));
 
             // 메뉴바 아이콘에 올리기
             java.awt.Image img = java.awt.Toolkit.getDefaultToolkit()

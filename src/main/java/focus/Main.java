@@ -35,6 +35,9 @@ public class Main extends Application {
     private javafx.animation.PauseTransition pendingCurtainCall;                // 중도 종료 뒤 커튼콜까지 기다리는 중
     private ShowRecord earlierActs;                                             // 공연 이어보기 중이면 앞 막까지의 기록, 아니면 null
     private final DoNotDisturb dnd = new DoNotDisturb();                        // 방해금지 연동 (단축어 실행)
+    private CurtainOverlay curtainOverlay;                                      // 커튼 판 (공연 시작, 종료 때 막을 올리고 붙잡음)
+    private TheaterWindow theaterWindow;                                        // 로비, 예매 화면을 띄우는 극장 창
+    private EndButton endButton;                                                // 막이 내려오는 동안 화면 왼쪽 아래 공연 종료 버튼
 
     @Override
     public void start(Stage stage) {
@@ -50,7 +53,7 @@ public class Main extends Application {
         scene.setFill(Color.TRANSPARENT);    // Scene 배경을 투명하게 설정
         scene.getStylesheets().add(Main.class.getResource("/css/theater.css").toExternalForm());   // 커튼 안내 문구 모양
         stage.setScene(scene);
-        CurtainOverlay curtainOverlay = new CurtainOverlay(scene.getWidth(), scene.getHeight());    // 현재 화면 크기로 커튼 객체 생성
+        curtainOverlay = new CurtainOverlay(scene.getWidth(), scene.getHeight());    // 현재 화면 크기로 커튼 객체 생성
         root.getChildren().add(curtainOverlay.getView());    // 커튼 판을 root 화면에 추가
 
         Duration interval = Duration.seconds(1);    // 실행 간격 설정
@@ -69,19 +72,18 @@ public class Main extends Application {
             long tickNow = System.currentTimeMillis();
             curtainOverlay.updateHud(show.isRunning(), show.isUnlimited(), show.remainingMillis(tickNow),
                 show.elapsedMillis(tickNow), progress);    // 남은(무제한이면 지난) 시간, 닫힌 정도 표시
+            if (show.isRunning() && progress > 0)
+                endButton.show();       // 공연 종료 버튼은 막이 내려오기 시작할 때만 (평소 종료는 메뉴바)
+            else
+                endButton.hide();
 
             boolean curtainDown = curtainDownRule.onTick(running, elapsed, distracting);    // 막이 다 닫힌 첫 1초
-            if (running) {      // 임시
+            if (running) {
                 long now = System.currentTimeMillis();
                 if (show.isTimeUp(now))
-                    show.requestEnd(now);                                  // 임시: 공연 길이를 다 채우면 종료 요청
-                else if (curtainDown) {
-                    show.requestEnd(now, ShowEnding.CURTAIN_DOWN);         // 임시: 막이 다 닫히면 중도 종료 요청
-                    curtainOverlay.holdClosed();                           // 막을 닫은 채로 두고 종료 문구
-                    pendingCurtainCall = new javafx.animation.PauseTransition(Duration.millis(CurtainDownRule.CURTAIN_CALL_DELAY_MILLIS));
-                    pendingCurtainCall.setOnFinished(e -> System.out.println("임시: 커튼콜 자리"));   // 임시
-                    pendingCurtainCall.play();
-                }
+                    endShow(now);       // 공연 길이를 다 채우면 종료 (같은 1초에 막도 다 닫혔다면 끝까지 본 것으로)
+                else if (curtainDown)
+                    endShow(now, ShowEnding.CURTAIN_DOWN);     // 막이 다 닫히면 그 자리에서 중도 종료
             }
         });
         Timeline timeline = new Timeline();    // 반복 실행의 일정표 객체생성
@@ -95,6 +97,7 @@ public class Main extends Application {
         stage.setY(screenBounds.getMinY());
         stage.show();   // 창 띄우기
         enableMacClickThrough();
+        endButton = new EndButton(() -> endShow(System.currentTimeMillis()));    // 길게 누르면 메뉴바 '공연 종료'와 같은 동작
 
         // 허용 목록: ~/.curtain-call/allowed-apps.txt에서 읽음(없으면 기본 목록)
         AllowList allowList = new AllowList(
@@ -144,6 +147,50 @@ public class Main extends Application {
         });
         watcher.setDaemon(true);    // 창 닫으면 이 스레드도 같이 종료되게
         watcher.start();    // 스레드 시작
+    }
+
+    // 티켓으로 입장: 공연 시작 + 막 오름 + 방해금지 켜기 (FX 스레드)
+    private void startShow(Ticket t) {
+        if (pendingCurtainCall != null)
+            pendingCurtainCall.stop();      // 직전 공연의 커튼콜 대기가 남아 있으면 버림
+        curtainOverlay.releaseHold();
+        ticket = t;
+        detectionState.setDistracting(false);
+        detectionState.setDistractionElapsedSeconds(0);
+        show.start(System.currentTimeMillis(), t.getLength(), t.getTopic());
+        curtainOverlay.setTopic(t.getTopic());
+        curtainOverlay.raiseCurtain();
+        runInBackground(dnd::turnOn);
+    }
+
+    // 공연 종료 요청(정상 종료). 실제 마감은 다음 1초에 감지 스레드가 함
+    private void endShow(long nowMillis) {
+        endShow(nowMillis, ShowEnding.COMPLETED);
+    }
+
+    // 막이 다 닫혀 끝나면 막을 닫은 채 종료 문구를 보여 줌. 어떻게 끝나든 방해금지를 끄고 종료 버튼을 숨김
+    private void endShow(long nowMillis, ShowEnding ending) {
+        if (!show.isRunning())
+            return;
+        show.requestEnd(nowMillis, ending);
+        if (show.getEnding() == ShowEnding.CURTAIN_DOWN)
+            curtainOverlay.holdClosed();
+        runInBackground(dnd::turnOff);
+        endButton.hide();
+    }
+
+    // 공연 이어보기: 주제, 허용 목록, 좌석은 그대로, 남은 시간만큼 다음 막. 끝나면 같은 기록에 합침
+    private void continueShow(ShowRecord record, ShowLength rest) {
+        earlierActs = record;
+        theaterWindow.hide();
+        startShow(ticket.withLength(rest));
+    }
+
+    // 오래 걸릴 수 있는 일(단축어 실행)을 화면 스레드 밖에서 돌림
+    private static void runInBackground(Runnable work) {
+        Thread t = new Thread(work);
+        t.setDaemon(true);
+        t.start();
     }
 
     // 1초 대기, 스레드 종료 신호를 받으면 false

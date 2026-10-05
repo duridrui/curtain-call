@@ -38,9 +38,12 @@ public class Main extends Application {
     private CurtainOverlay curtainOverlay;                                      // 커튼 판 (공연 시작, 종료 때 막을 올리고 붙잡음)
     private TheaterWindow theaterWindow;                                        // 로비, 예매 화면을 띄우는 극장 창
     private EndButton endButton;                                                // 막이 내려오는 동안 화면 왼쪽 아래 공연 종료 버튼
+    private java.awt.TrayIcon trayIcon;                                         // 메뉴바 아이콘 (남은 시간 툴팁)
+    private java.awt.MenuItem endItem;                                          // 메뉴바 '공연 종료' (공연 중에만 켬)
 
     @Override
     public void start(Stage stage) {
+        Platform.setImplicitExit(false);    // 극장 창을 숨겨도 앱은 메뉴바에 남게
         stage.setAlwaysOnTop(true);    // 항상 위에오게
         stage.setTitle(OVERLAY_TITLE);
         stage.initStyle(StageStyle.TRANSPARENT);    // 배경 안 칠하게
@@ -161,6 +164,8 @@ public class Main extends Application {
         curtainOverlay.setTopic(t.getTopic());
         curtainOverlay.raiseCurtain();
         runInBackground(dnd::turnOn);
+        setEndEnabled(true);
+        setTrayTip("공연 중 · " + t.getTopic() + " · " + lengthText(t.getLength()) + " " + t.getSeat());
     }
 
     // 공연 종료 요청(정상 종료). 실제 마감은 다음 1초에 감지 스레드가 함
@@ -176,7 +181,9 @@ public class Main extends Application {
         if (show.getEnding() == ShowEnding.CURTAIN_DOWN)
             curtainOverlay.holdClosed();
         runInBackground(dnd::turnOff);
+        setEndEnabled(false);
         endButton.hide();
+        setTrayTip("Curtain Call");
     }
 
     // 공연 이어보기: 주제, 허용 목록, 좌석은 그대로, 남은 시간만큼 다음 막. 끝나면 같은 기록에 합침
@@ -191,6 +198,18 @@ public class Main extends Application {
         Thread t = new Thread(work);
         t.setDaemon(true);
         t.start();
+    }
+
+    // 메뉴바 '공연 종료'를 공연 중에만 누를 수 있게 (메뉴바 스레드에서 바꿈)
+    private void setEndEnabled(boolean enabled) {
+        if (endItem != null)
+            java.awt.EventQueue.invokeLater(() -> endItem.setEnabled(enabled));
+    }
+
+    // 메뉴바 아이콘에 마우스를 올리면 보이는 글
+    private void setTrayTip(String text) {
+        if (trayIcon != null)
+            java.awt.EventQueue.invokeLater(() -> trayIcon.setToolTip(text));
     }
 
     // 1초 대기, 스레드 종료 신호를 받으면 false
@@ -244,14 +263,19 @@ public class Main extends Application {
     // 메뉴바에 아이콘 추가 (커튼에 갇혔을 때 비상구)
     private void installQuitMenu(AllowList allowList, SiteAllowList siteAllowList) {
         try {
-            // 설정 메뉴와 종료 메뉴 준비
+            // 공연 종료, 설정, 종료 메뉴 준비
             java.awt.PopupMenu trayMenu = new java.awt.PopupMenu();
+            endItem = new java.awt.MenuItem("공연 종료");
+            endItem.setEnabled(false);          // 앱을 켰을 땐 공연 전
             java.awt.MenuItem quitItem = new java.awt.MenuItem("종료");
             java.awt.MenuItem settingsItem = new java.awt.MenuItem("기본 허용 목록…");
             AllowListWindow settingsWindow = new AllowListWindow(allowList, siteAllowList);
+            trayMenu.add(endItem);
+            trayMenu.addSeparator();
             trayMenu.add(settingsItem);
             trayMenu.add(quitItem);
             settingsItem.addActionListener(e -> Platform.runLater(() -> settingsWindow.show()));    // 메뉴 클릭을 화면 작업으로 넘김
+            endItem.addActionListener(e -> Platform.runLater(() -> endShow(System.currentTimeMillis())));
             // "종료"를 누르면 할 일
             quitItem.addActionListener(e -> {
                 Platform.exit();
@@ -261,7 +285,7 @@ public class Main extends Application {
             // 메뉴바 아이콘에 올리기
             java.awt.Image img = java.awt.Toolkit.getDefaultToolkit()
                     .getImage(getClass().getResource("/images/tray.png"));
-            java.awt.TrayIcon trayIcon = new java.awt.TrayIcon(img, "Curtain Call", trayMenu);
+            trayIcon = new java.awt.TrayIcon(img, "Curtain Call", trayMenu);
             trayIcon.setImageAutoSize(true);
             java.awt.SystemTray.getSystemTray().add(trayIcon);
         } catch (Exception e) {
@@ -338,5 +362,15 @@ public class Main extends Application {
 
     public static void main(String[] args) {
         launch(args);
+    }
+
+    // 공연 길이 글: 무제한, 이어보기처럼 초가 남은 길이는 초까지, 나머지는 시간과 분
+    private static String lengthText(ShowLength length) {
+        if (length.isUnlimited())
+            return "무제한";
+        int h = length.getMinutes() / 60, m = length.getMinutes() % 60;
+        if (h == 0)
+            return m + "분";
+        return m == 0 ? h + "시간" : h + "시간 " + m + "분";
     }
 }

@@ -1,0 +1,38 @@
+{
+ "version": 1,
+ "packs": [
+  {
+   "tier": "low",
+   "file": "curtain-low.zip",
+   "bytes": 125085109,
+   "sha256": "3c8540903672cdc4cd563d465d96f0286049fd9eb5c512f03b7eac0481c111ab",
+   "width": 480,
+   "height": 540,
+   "closed": 450,
+   "open": 90,
+   "files": 1080
+  },
+  {
+   "tier": "medium",
+   "file": "curtain-medium.zip",
+   "bytes": 231785371,
+   "sha256": "b31f5189e0a146257eef4acdabda3807b9d809981fb139f7a10b1ff7abc7c9cd",
+   "width": 480,
+   "height": 540,
+   "closed": 900,
+   "open": 90,
+   "files": 1980
+  },
+  {
+   "tier": "high",
+   "file": "curtain-high.zip",
+   "bytes": 1195523837,
+   "sha256": "a455ceb4eaed4c01c6baba8a57331c7ba9c4a9c4734c31f4224e7130d4cb9fdc",
+   "width": 960,
+   "height": 1080,
+   "closed": 900,
+   "open": 90,
+   "files": 1980
+  }
+ ]
+}

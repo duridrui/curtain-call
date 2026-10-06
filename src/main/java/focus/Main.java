@@ -8,12 +8,16 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.scene.paint.Color;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import javafx.animation.Timeline;
 import javafx.animation.KeyFrame;
 import javafx.util.Duration;
 import javafx.geometry.Rectangle2D;
 import javafx.stage.Screen;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import com.sun.jna.NativeLibrary;
@@ -28,6 +32,7 @@ public class Main extends Application {
     static final List<String> BROWSERS = List.of("Google Chrome", "Safari");
     // 실행 중인 앱 읽기 (예매의 허용 목록 단계가 고를 앱 목록)
     static java.util.function.Supplier<List<String>> runningAppsReader = ShowAllowList::runningApps;
+    private static final DateTimeFormatter RECORD_ID = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     // 감지 스레드와 화면이 함께 쓰는 공연 정보
     private final DetectionState detectionState = new DetectionState();         // 감지 결과를 담을 객체
@@ -93,6 +98,10 @@ public class Main extends Application {
                     endShow(now);       // 공연 길이를 다 채우면 종료 (같은 1초에 막도 다 닫혔다면 끝까지 본 것으로)
                 else if (curtainDown)
                     endShow(now, ShowEnding.CURTAIN_DOWN);     // 막이 다 닫히면 그 자리에서 중도 종료
+                else if (show.isUnlimited())
+                    setTrayTip("공연 중 · 무제한 · 지난 시간 " + CurtainCallReport.formatDuration(show.elapsedMillis(now)));
+                else
+                    setTrayTip("공연 중 · 남은 시간 " + CurtainCallReport.formatDuration(show.remainingMillis(now)));
             }
         });
         Timeline timeline = new Timeline();    // 반복 실행의 일정표 객체생성
@@ -172,6 +181,8 @@ public class Main extends Application {
                 System.out.println("front: " + app + " / 통계 이름 : " + statsName + " / 딴짓 : " + shown);    // 앱, 통계 이름, 커튼에 알릴 딴짓 여부
                 detectionState.setCurrentAppName(app);
                 detectionState.setDistracting(shown);
+                if (show.consumeFinished())
+                    Platform.runLater(this::showCurtainCall);   // 마감이 끝나면 FX 스레드에서 커튼콜
                 if (!sleepOneSecond())                                                                     // 1초 대기, 종료 신호면 반복 끝
                     break;
             }
@@ -213,6 +224,48 @@ public class Main extends Application {
         setEndEnabled(false);
         endButton.hide();
         setTrayTip("Curtain Call");
+    }
+
+    // 커튼콜: 기록 저장 후 관람 완료 티켓 (FX 스레드). 이어본 공연이면 앞 막 기록에 합쳐 같은 기록으로 저장
+    private void showCurtainCall() {
+        String id = RECORD_ID.format(Instant.ofEpochMilli(show.getStartMillis()).atZone(ZoneId.systemDefault()));
+        ShowRecord record = CurtainCallReport.toRecord(id, show, ticket == null ? "" : ticket.getSeat());
+        if (earlierActs != null) {
+            record = ShowRecord.mergeAct(earlierActs, record);
+            earlierActs = null;
+            id = record.getId();
+        }
+        try {
+            history.save(record);
+        } catch (IOException | RuntimeException e) {
+            System.err.println("관람 기록 저장 실패 : " + e.getMessage());
+        }
+        ShowRecord previous = history.previousOf(id);
+        if (show.getEnding() != ShowEnding.CURTAIN_DOWN) {      // 이번 막이 정상 종료면 바로 커튼콜
+            presentCurtainCall(record, previous);
+            return;
+        }
+        ShowRecord shown = record;
+        // 중도 종료: 막이 닫힌 시각부터 1.5초 동안 종료 문구를 보여 준 뒤 커튼콜, 그다음 막을 올림
+        long delay = CurtainDownRule.curtainCallDelay(show.getEndMillis(), System.currentTimeMillis());
+        pendingCurtainCall = new javafx.animation.PauseTransition(Duration.millis(delay));
+        pendingCurtainCall.setOnFinished(e -> {
+            pendingCurtainCall = null;
+            presentCurtainCall(shown, previous);
+            curtainOverlay.releaseHold();
+        });
+        pendingCurtainCall.play();
+    }
+
+    private void presentCurtainCall(ShowRecord record, ShowRecord previous) {
+        if (quitAfterCurtainCall) {
+            theaterWindow.showCurtainCall(record, previous, "퇴장", this::exitNow, null);
+            return;
+        }
+        ShowLength rest = ShowRecord.remainingAfter(record);
+        boolean canContinue = show.getEnding() == ShowEnding.CURTAIN_DOWN && rest != null && ticket != null;
+        theaterWindow.showCurtainCall(record, previous, "로비로", theaterWindow::showLobby,
+            canContinue ? () -> continueShow(record, rest) : null);
     }
 
     // 공연 이어보기: 주제, 허용 목록, 좌석은 그대로, 남은 시간만큼 다음 막. 끝나면 같은 기록에 합침
@@ -304,19 +357,25 @@ public class Main extends Application {
         }
     }
 
-    // 메뉴바에 아이콘 추가 (커튼에 갇혔을 때 비상구)
+    // 메뉴바에 아이콘 추가 (로비, 공연 종료, 설정, 커튼에 갇혔을 때 비상구)
     private void installQuitMenu(AllowListWindow settingsWindow) {
         try {
-            // 공연 종료, 설정, 종료 메뉴 준비
+            // 로비, 공연 종료, 설정, 종료 메뉴 준비
             java.awt.PopupMenu trayMenu = new java.awt.PopupMenu();
+            java.awt.MenuItem lobbyItem = new java.awt.MenuItem("로비 열기");
             endItem = new java.awt.MenuItem("공연 종료");
             endItem.setEnabled(false);          // 앱을 켰을 땐 공연 전
             java.awt.MenuItem quitItem = new java.awt.MenuItem("종료");
             java.awt.MenuItem settingsItem = new java.awt.MenuItem("기본 허용 목록…");
+            trayMenu.add(lobbyItem);
             trayMenu.add(endItem);
             trayMenu.addSeparator();
             trayMenu.add(settingsItem);
             trayMenu.add(quitItem);
+            lobbyItem.addActionListener(e -> Platform.runLater(() -> {     // 공연 중에는 로비를 띄우지 않음
+                if (!show.isRunning())
+                    theaterWindow.showLobby();
+            }));
             settingsItem.addActionListener(e -> Platform.runLater(() -> settingsWindow.show()));    // 메뉴 클릭을 화면 작업으로 넘김
             endItem.addActionListener(e -> Platform.runLater(() -> endShow(System.currentTimeMillis())));
             // "종료"를 누르면 할 일 (공연 중이면 공연을 먼저 끝냄)
@@ -408,6 +467,8 @@ public class Main extends Application {
     private static String lengthText(ShowLength length) {
         if (length.isUnlimited())
             return "무제한";
+        if (length.getMillis() % 60_000 != 0)
+            return CurtainCallReport.formatDuration(length.getMillis());
         int h = length.getMinutes() / 60, m = length.getMinutes() % 60;
         if (h == 0)
             return m + "분";

@@ -118,6 +118,13 @@ public class TheaterWindow {
         }, this::showLobby, actions.lists(), actions::runningApps).build());
     }
 
+    // 공연이 끝나면 커튼콜. exitLabel 버튼을 누르면 onExit, onContinue가 있으면 '공연 이어보기' 버튼
+    public void showCurtainCall(ShowRecord record, ShowRecord previous, String exitLabel, Runnable onExit, Runnable onContinue) {
+        onLobby = false;
+        setContent(new CurtainCallView(record, previous, exitLabel, onExit, onContinue).build());
+        bringToFront(true);
+    }
+
     // 창을 숨김 (공연이 시작되면 극장 창을 치우고 커튼 창만 남김)
     public void hide() {
         stage.hide();

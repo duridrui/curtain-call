@@ -3,11 +3,12 @@ package focus;
 import java.nio.file.Path;
 
 // Blender 커튼 프레임 폴더 하나: 닫힘 left/right curtain_NNN + 막 오름 open_left/open_right open_NN.
+// 어느 폴더를 쓸지는 화질 등급이 정한다(CurtainPacks: 앱에 든 저화질 또는 받아 둔 중화질, 고화질).
 // 폴더가 없거나 장 수가 어긋나면 null을 돌려주고 사진 커튼(curtain.jpg)을 씀.
 // right/, open_right/는 이미 오른쪽 그림(렌더 뒤 좌우 반전)이라 앱에서 뒤집지 않는다
 record BlenderCurtain(CurtainFrames left, CurtainFrames right, CurtainFrames openLeft, CurtainFrames openRight) {
 
-    // 개발용: -Dcurtain.frames=폴더 를 주면 그 폴더를 씀 (없으면 null). 그림은 창 반쪽 크기에 맞춰 늘린다
+    // 개발용: -Dcurtain.frames=폴더 를 주면 화질 등급 대신 그 폴더를 씀 (없으면 null). 그림은 창 반쪽 크기에 맞춰 늘린다
     static final Path ROOT = System.getProperty("curtain.frames") == null ? null : Path.of(System.getProperty("curtain.frames"));
 
     static BlenderCurtain load(Path root) {

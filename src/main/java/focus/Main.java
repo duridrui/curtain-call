@@ -372,7 +372,7 @@ public class Main extends Application {
             trayMenu.addSeparator();
             trayMenu.add(settingsItem);
             trayMenu.add(quitItem);
-            lobbyItem.addActionListener(e -> Platform.runLater(() -> {     // 공연 중엔 로비 대신 남은 시간만 알림
+            lobbyItem.addActionListener(e -> Platform.runLater(() -> {     // 공연 중에는 로비를 띄우지 않음
                 if (!show.isRunning())
                     theaterWindow.showLobby();
             }));

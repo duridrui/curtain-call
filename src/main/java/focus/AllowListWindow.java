@@ -28,10 +28,16 @@ public class AllowListWindow {
     private Label statusLabel;
     private final ObservableList<String> items = FXCollections.observableArrayList();
     private final ObservableList<String> siteItems = FXCollections.observableArrayList();
+    private final CurtainQualityPane qualityPane;
 
     public AllowListWindow(AllowList allowList, SiteAllowList siteAllowList) {
+        this(allowList, siteAllowList, new CurtainQualityPane(CurtainPacks.forApp()));
+    }
+
+    AllowListWindow(AllowList allowList, SiteAllowList siteAllowList, CurtainQualityPane qualityPane) {
         this.allowList = allowList;
         this.siteAllowList = siteAllowList;
+        this.qualityPane = qualityPane;
     }
 
     public void show() {
@@ -73,8 +79,9 @@ public class AllowListWindow {
             HBox columns = new HBox(28, appColumn, siteColumn);
             HBox buttonRow = new HBox(12, statusLabel, Ui.grow(), closeButton, saveButton);
             buttonRow.setAlignment(Pos.CENTER_LEFT);
-            VBox content = new VBox(0, header, siteNote, columns, buttonRow);
+            VBox content = new VBox(0, header, siteNote, columns, qualityPane.view(), buttonRow);
             VBox.setMargin(siteNote, new Insets(4, 0, 20, 0));
+            VBox.setMargin(qualityPane.view(), new Insets(20, 0, 0, 0));
             VBox.setMargin(buttonRow, new Insets(24, 0, 0, 0));
             content.setPadding(new Insets(24, 36, 28, 36));
             Rectangle valance = new Rectangle(0, 14);
@@ -94,6 +101,7 @@ public class AllowListWindow {
         }
         stateChip.setText(SAVED);
         statusLabel.setText("");
+        qualityPane.refresh();
         boolean opening = !stage.isShowing();
         stage.show();
         stage.toFront();

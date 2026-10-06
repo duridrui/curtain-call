@@ -99,7 +99,7 @@ public class TheaterWindow {
         onLobby = true;
         List<ShowRecord> history = actions.history();
         setContent(new LobbyView(dndReady, history.isEmpty() ? null : history.get(0), history.size(),
-            this::showBooking, () -> { }, actions::openSettings, actions::quit).build());   // 관람 기록 화면(HistoryView)이 생기면 this::showHistory
+            this::showBooking, this::showHistory, actions::openSettings, actions::quit).build());
         bringToFront(false);
     }
 
@@ -116,6 +116,12 @@ public class TheaterWindow {
             stage.hide();
             actions.enter(ticket);
         }, this::showLobby, actions.lists(), actions::runningApps).build());
+    }
+
+    // 관람 기록 화면: 지난 공연 목록, 돌아가기 버튼을 누르면 로비로
+    public void showHistory() {
+        onLobby = false;
+        setContent(new HistoryView(actions.history(), this::showLobby).build());
     }
 
     // 공연이 끝나면 커튼콜. exitLabel 버튼을 누르면 onExit, onContinue가 있으면 '공연 이어보기' 버튼

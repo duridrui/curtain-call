@@ -178,7 +178,6 @@ public class Main extends Application {
                 }
 
                 boolean shown = show.tick(statsName, distracting, System.currentTimeMillis());              // 공연 중이면 통계에 적고 판정 그대로, 아니면 false
-                System.out.println("front: " + app + " / 통계 이름 : " + statsName + " / 딴짓 : " + shown);    // 앱, 통계 이름, 커튼에 알릴 딴짓 여부
                 detectionState.setCurrentAppName(app);
                 detectionState.setDistracting(shown);
                 if (show.consumeFinished())
@@ -351,8 +350,8 @@ public class Main extends Application {
                 if (!OVERLAY_TITLE.equals(title)) continue;     // 커튼 창이 아니면 건너뜀
                 msg.invokeVoid(new Object[]{w, setSel, (byte) 1});  // 커튼 창의 클릭을 뒤 화면으로 통과
             }
-        } catch (Throwable t) {
-            // 클릭 통과 실패해도 앱은 계속 뜨게
+        } catch (RuntimeException | LinkageError t) {
+            // 맥 라이브러리를 못 찾거나(LinkageError) JNA 호출이 실패해도(RuntimeException) 앱은 계속 뜨게
             System.err.println("클릭 통과 설정 실패(무시하고 계속): " + t.getMessage());
         }
     }

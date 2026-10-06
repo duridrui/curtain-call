@@ -76,6 +76,7 @@ public class DoNotDisturb {
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
             pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);     // 출력은 쓰지 않음
+            pb.redirectInput(ProcessBuilder.Redirect.from(new java.io.File("/dev/null")));     // 입력이 없다고 바로 알림 (열어 두면 shortcuts run이 입력을 기다리다 2초 제한에 걸림)
             Process p = pb.start();
             if (!p.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)) {
                 p.destroyForcibly();                                // 제한 시간 넘으면 끝냄

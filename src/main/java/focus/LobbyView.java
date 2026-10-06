@@ -96,8 +96,8 @@ class LobbyView {
 
     private String hintText() {
         if (Boolean.FALSE.equals(dndReady))
-            return "방해금지 연동: 단축어 앱에서 '커튼콜 방해금지 켜기'와\n"
-                +"'커튼콜 방해금지 끄기'를 만들면 공연 중 자동으로 켜집니다.";
+            return "방해금지 연동: 단축어 앱에서 '" + DoNotDisturb.ON_NAME + "'(집중 모드 켜기)와\n'"
+                + DoNotDisturb.OFF_NAME + "'(집중 모드 끄기) 단축어를 만들면\n공연 중에만 방해금지가 켜집니다.";
         return "앱을 켜도 딴짓 감지는 시작하지 않습니다.\n예매하고 입장하면 공연이 시작됩니다.";
     }
 

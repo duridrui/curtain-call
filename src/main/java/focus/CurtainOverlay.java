@@ -61,6 +61,7 @@ public class CurtainOverlay {
     // Blender 프레임 커튼. frames가 null이면 사진 커튼만 쓰고 아래 필드는 쓰지 않는다.
     // 사진 커튼의 두 Rectangle은 숨긴 채 그대로 움직이고(닫힘, 다시 열림, 붙잡기 규칙을 그대로 씀), 그 위치를 닫힘 장 번호로 바꿔 보인다
     private final BlenderCurtain frames;
+    private final boolean blend;                // 닫힘 장 사이 두 장 섞기 (저화질)
     private final ImageView leftFrame = new ImageView();
     private final ImageView rightFrame = new ImageView();
     private javafx.scene.image.WritableImage leftPixels, rightPixels;     // 장마다 픽셀만 바꿔 쓰는 그림 두 장
@@ -76,13 +77,30 @@ public class CurtainOverlay {
     private AnimationTimer raiseTimer;
 
     public CurtainOverlay(double screenWidth, double screenHeight) {
-        this(screenWidth, screenHeight, BlenderCurtain.load(BlenderCurtain.ROOT));
+        this(screenWidth, screenHeight, appCurtain());
     }
 
-    // frames: Blender 프레임 (null이면 사진 커튼)
-    CurtainOverlay(double screenWidth, double screenHeight, BlenderCurtain frames) {
+    // 이번 실행에서 쓸 커튼: 개발용 폴더(-Dcurtain.frames)가 있으면 그것, 아니면 고른 화질 등급(받아 둔 팩이 온전치 않으면 저화질)
+    record Choice(BlenderCurtain frames, boolean blend, String label) {
+    }
+
+    static Choice appCurtain() {
+        if (BlenderCurtain.ROOT != null)
+            return new Choice(BlenderCurtain.load(BlenderCurtain.ROOT), Boolean.getBoolean("curtain.blend"), "개발용 폴더 " + BlenderCurtain.ROOT);
+        CurtainPacks.Active active = CurtainPacks.forApp().active();
+        return new Choice(BlenderCurtain.load(active.root()), active.quality().blend,
+            active.quality().label + (active.note().isEmpty() ? "" : " (" + active.note() + ")"));
+    }
+
+    private CurtainOverlay(double screenWidth, double screenHeight, Choice choice) {
+        this(screenWidth, screenHeight, choice.frames(), choice.blend(), choice.label());
+    }
+
+    // frames: Blender 프레임 (null이면 사진 커튼), blend: 닫힘 장 사이를 두 장 섞어 보임 (장 수를 줄인 저화질), label: 시작 로그에 남길 커튼 이름
+    CurtainOverlay(double screenWidth, double screenHeight, BlenderCurtain frames, boolean blend, String label) {
         long setUpStart = System.nanoTime();
         this.frames = frames;
+        this.blend = blend;
         leftCurtain.setWidth(screenWidth / 2);    // 왼쪽 커튼 가로 길이 설정
         leftCurtain.setHeight(screenHeight);    // 왼쪽 커튼 세로 길이 설정
         rightCurtain.setWidth(screenWidth / 2);    // 오른쪽 커튼 가로 길이 설정
@@ -117,9 +135,9 @@ public class CurtainOverlay {
         if (frames != null)
             setUpFrames(screenWidth / 2, screenHeight);
         System.out.println(frames != null
-            ? "커튼: Blender 본렌더_v2 (닫힘 " + frames.left().count() + "장, 막 오름 " + frames.openLeft().count() + "장, 준비 "
-                + (System.nanoTime() - setUpStart) / 1_000_000 + "ms, 장 바이트는 백그라운드로 올림)"
-            : "커튼: 사진 커튼 (Blender 프레임을 못 찾았거나 끔: " + BlenderCurtain.ROOT + ")");
+            ? "커튼: " + label + " (닫힘 " + frames.left().count() + "장, 막 오름 " + frames.openLeft().count() + "장"
+                + (blend ? ", 두 장 섞기" : "") + ", 준비 " + (System.nanoTime() - setUpStart) / 1_000_000 + "ms, 장 바이트는 백그라운드로 올림)"
+            : "커튼: 사진 커튼 (Blender 프레임을 못 찾았거나 끔: " + label + ")");
 
         noticeTitle.getStyleClass().add("notice-title");
         noticeBody.getStyleClass().add("notice-body");
@@ -337,7 +355,65 @@ public class CurtainOverlay {
         if (targetFrame >= 0 && index != targetFrame)
             closedStep = index - targetFrame;       // 다음 펄스에 움직일 만큼 (빨리 열릴 때는 건너뛸 간격)
         closedSides.aim(index, closedStep);
+        if (blend && progress < 1 && showBlended(progress, count))
+            return;
         show(closedSides, index);
+    }
+
+    // 닫힘 장 사이를 두 장 섞어 보임 (저화질은 닫힘 450장이라 그대로 두면 초당 15번만 바뀜, 섞으면 900장만큼 고름).
+    // 두 장이 다 풀렸을 때만 섞고, 아니면 false (보통대로 한 장)
+    private int[] blendLeft, blendRight;
+    private int blendedBase = -1, blendedWeight = -1;      // 마지막으로 섞은 단계
+    private boolean blendedOnScreen;                         // 화면 그림이 섞은 장인지 (한 장을 보일 땐 꼭 다시 그리게)
+
+    // 두 장 사이 위치(0~1)에 맞는 섞는 비율. 가운데 한 단계만 써서 450장을 900단계로 (0 = 앞 장, 128 = 가운데, 256 = 다음 장)
+    static int blendWeight(double fraction) {
+        return (int) Math.round(fraction * 2) * 128;
+    }
+
+    private boolean showBlended(double progress, int count) {
+        double f = Math.max(0, progress) * (count - 1);
+        int base = (int) Math.floor(f);
+        int next = Math.min(count - 1, base + 1);
+        if (!closedSides.ready(base) || !closedSides.ready(next))
+            return false;
+        int w = blendWeight(f - base);
+        if (w == 0 || w == 256 || base == next)
+            return false;       // 섞을 것 없이 한 장 그대로 (보통 길로)
+        if (blendedOnScreen && base == blendedBase && w == blendedWeight)
+            return true;        // 이미 그 단계를 보이는 중
+        if (blendLeft == null) {
+            blendLeft = new int[frameWidth * frameHeight];
+            blendRight = new int[frameWidth * frameHeight];
+        }
+        mix(closedSides.left.get(base), closedSides.left.get(next), w, blendLeft);
+        mix(closedSides.right.get(base), closedSides.right.get(next), w, blendRight);
+        copy(leftBuffer, blendLeft);
+        copy(rightBuffer, blendRight);
+        blendedBase = base;
+        blendedWeight = w;
+        blendedOnScreen = true;
+        targetFrame = -1;       // 한 장 번호로는 없는 그림 (다음에 한 장을 보일 때 꼭 다시 그림)
+        shownFrame = -1;
+        leftFrame.setVisible(true);
+        rightFrame.setVisible(true);
+        return true;
+    }
+
+    // premultiplied ARGB 두 장을 w/256 비율로 섞음 (채널마다 선형)
+    static void mix(int[] a, int[] b, int w, int[] out) {
+        int v = 256 - w;
+        for (int i = 0; i < out.length; i++) {
+            int p = a[i], q = b[i];
+            if (p == q) {
+                out[i] = p;
+                continue;
+            }
+            out[i] = (((p >>> 24) * v + (q >>> 24) * w) >> 8) << 24
+                | ((((p >> 16) & 255) * v + ((q >> 16) & 255) * w) >> 8) << 16
+                | ((((p >> 8) & 255) * v + ((q >> 8) & 255) * w) >> 8) << 8
+                | (((p & 255) * v + (q & 255) * w) >> 8);
+        }
     }
 
     // 다시 열림 시작 (updateCurtain이 FX 스레드에서 부름): 지금 닫힌 정도에서 1.2초 일정을 정하고 앞쪽 장부터 풀기 시작
@@ -390,6 +466,7 @@ public class CurtainOverlay {
             return;     // 대신 보일 장도 없음: 앞 장을 그대로 둠 (숨겨 둔 그림이면 지난 장이 비치지 않게 계속 숨김)
         copy(leftBuffer, sides.left.get(pick));
         copy(rightBuffer, sides.right.get(pick));
+        blendedOnScreen = false;
         shownFrame = pick;
         leftFrame.setVisible(true);
         rightFrame.setVisible(true);
@@ -403,6 +480,7 @@ public class CurtainOverlay {
 
     // 닫힘과 막 오름이 서로 바뀔 때: 장 번호를 잊음 (화면의 그림은 다음 장을 보일 때까지 그대로)
     private void forgetFrames() {
+        blendedOnScreen = false;
         targetFrame = -1;
         shownFrame = -1;
         closedStep = 1;
